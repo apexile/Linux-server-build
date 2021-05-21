@@ -1,0 +1,71 @@
+# OpenSSH Configuration
+# Author: https://github.com/zZerooneXx
+
+# change the address and port of the SSH server. 
+ListenAddress 0.0.0.0
+Port 22
+# only use SSH protocol version 2
+Protocol 2
+# only listen to IPv4
+AddressFamily inet
+# SSH connections from anywhere to access the users
+#AllowUsers ZerooneX
+# allow root logged in via SSH
+PermitRootLogin yes
+# maximum number of repeated authentication attempts
+MaxAuthTries 8
+# disable empty passwords
+PermitEmptyPasswords no
+# disable s/key authentication
+ChallengeResponseAuthentication no
+# disable the information message from the /etc/motd file
+PrintMotd no
+# enable password authorization
+PasswordAuthentication yes
+# denied the use of unsafe access rights to the home directory and files
+StrictModes yes
+# allow a maximum of two multiplexed sessions over a single TCP connection
+MaxSessions 2
+# compression before encryption might cause security issues
+Compression no
+# disable reverse DNS lookups
+UseDNS no
+# disable .rhosts files
+IgnoreRhosts yes
+# disable all forwarding features
+DisableForwarding yes
+# disallow ssh-agent forwarding
+AllowAgentForwarding no
+# disallow TCP forwarding
+AllowTcpForwarding no
+# disallow StreamLocal (Unix-domain socket) forwarding
+AllowStreamLocalForwarding no
+# disable X11 forwarding
+X11Forwarding no
+# log object code for writing messages to the system log from sshd
+SyslogFacility AUTHPRIV
+# enable PAM interface, running sshd as root only
+UsePAM yes
+# time for authorization
+LoginGraceTime 180
+# sshd log verbosity level
+LogLevel INFO
+# information about when you last logged into the server and from which computer
+PrintLastLog yes
+# disable checking the activity of clients
+TCPKeepAlive no
+# accept locale-related environment variables
+AcceptEnv LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+AcceptEnv LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+AcceptEnv LC_IDENTIFICATION LC_ALL LANGUAGE
+AcceptEnv XMODIFIERS
+# SFTP subsystem
+Subsystem sftp internal-sftp
+# server private key
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+# User to send logs
+Match User banneduser
+    ForceCommand internal-sftp -P read,remove,mkdir,rmdir,rename,posix-rename
+    ChrootDirectory /srv/banneduser
