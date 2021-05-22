@@ -3,7 +3,7 @@
 
 # change the address and port of the SSH server. 
 ListenAddress 0.0.0.0
-Port $port
+Port #change-port
 # only use SSH protocol version 2
 Protocol 2
 # only listen to IPv4
