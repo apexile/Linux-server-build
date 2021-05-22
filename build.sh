@@ -14,6 +14,7 @@ max_orphan=$(echo "$mem_bytes * 0.10 / 65536" | bc | cut -f 1 -d '.')
 file_max=$(echo "$mem_bytes / 4194304 * 256" | bc | cut -f 1 -d '.')
 max_tw=$(($file_max*2))
 min_free=$(echo "($mem_bytes / 1024) * 0.01" | bc | cut -f 1 -d '.')
+port=$1
 
 #sysctl=$(curl -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/sysctl.sh)
 #sshd_config=$(curl -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/sshd_config)
