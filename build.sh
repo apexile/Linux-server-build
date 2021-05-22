@@ -20,7 +20,7 @@ min_free=$(echo "($mem_bytes / 1024) * 0.01" | bc | cut -f 1 -d '.')
 #iptables=$(curl -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/IPT.sh)
 #nginx=$(curl -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/nginx.conf)
 
-test=$(curl -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/sysctl.sh)
+test=$(curl -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/sshd_config)
 
 #>/etc/sysctl.conf cat << EOF 
 >/var/test/testo.conf cat << EOF 
