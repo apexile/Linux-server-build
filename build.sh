@@ -55,12 +55,17 @@ do
         IPT=1
         shift
         ;;
-        -ppp=*|--sshport=*)
+        --sshport=*)
         SSHPORT="${arg#*=}"
         shift
         ;;
         -d|--domain)
         DOMAIN="$2"
+        shift
+        shift
+        ;;
+        --ppp)
+        SSHPORT="$2"
         shift
         shift
         ;;
