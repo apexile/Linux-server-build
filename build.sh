@@ -23,7 +23,7 @@ SOURCE="https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src
 NGINX=0
 SSH=0
 IPT=0
-SSHPORT="22"
+SSHPORT=22
 DOMAIN="example.com"
 HOST=$(hostname -I | awk '{ print $1 }')
 TAGS=()
@@ -55,7 +55,7 @@ do
         IPT=1
         shift
         ;;
-        --sshport=*)
+        -ppp=*|--sshport=*)
         SSHPORT="${arg#*=}"
         shift
         ;;
