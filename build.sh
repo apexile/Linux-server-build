@@ -108,12 +108,13 @@ fi
 #########################################################################################
 
 if [ $IPT != 0 ]; then
-    curl https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/iptables.sh | sh -s -- --ssh=$1
+    curl -s https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/iptables.sh | sh -s -- --ssh=$SSHPORT
 fi
 
 
 
 
+echo "# SSHD: $SSHPORT"
 
 echo "# Other arguments: ${TAGS[*]}"
 echo "### FINAL ###"
