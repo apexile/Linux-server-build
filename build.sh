@@ -108,7 +108,7 @@ fi
 #########################################################################################
 
 if [ $IPT != 0 ]; then
-    curl -s https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/iptables.sh | sh -s=$SSHPORT
+    curl -s https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/iptables.sh | sh -s -- -s=$SSHPORT
 fi
 
 
