@@ -101,6 +101,7 @@ SSH=$(echo "$(curl -s -L https://raw.githubusercontent.com/zZerooneXx/Linux-serv
 >/etc/ssh/sshd_config cat << EOF 
 $SSH
 EOF
+systemctl restart sshd
 fi
 
 #########################################################################################
@@ -111,12 +112,7 @@ if [ $IPT != 0 ]; then
     curl -s https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/iptables.sh | sh -s -- --ssh=$SSHPORT
 fi
 
-
-
-
-#echo "# SSHD: $SSHPORT"
-
-echo "# Other arguments: ${TAGS[*]}"
-echo "### FINAL ###"
+#echo "# Other arguments: ${TAGS[*]}"
+#echo "### FINAL ###"
 
 exit $?
