@@ -114,7 +114,7 @@ fi
 
 
 
-echo "# SSHD: $SSHPORT"
+#echo "# SSHD: $SSHPORT"
 
 echo "# Other arguments: ${TAGS[*]}"
 echo "### FINAL ###"
