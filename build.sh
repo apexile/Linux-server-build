@@ -87,7 +87,7 @@ EOF
 
 if [ $NGINX != 0 ]; then
 NGINX=$(echo "$(curl -s -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/nginx.conf)" | sed "s/example.com/$DOMAIN/g")
->/var/test/nginx.conf cat << EOF 
+>/etc/nginx/nginx.conf cat << EOF 
 $NGINX
 EOF
 fi
@@ -98,7 +98,7 @@ fi
 
 if [ $SSH != 0 ]; then
 SSH=$(echo "$(curl -s -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/sshd_config)" | sed "s/#change-port/$SSHPORT/g")
->/var/test/sshd.conf cat << EOF 
+>/etc/ssh/sshd_config cat << EOF 
 $SSH
 EOF
 fi
