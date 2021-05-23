@@ -56,7 +56,7 @@ do
         shift
         ;;
         --sshport=*)
-        SSHP="${arg#*=}"
+        SSHPORT="${arg#*=}"
         shift
         ;;
         -d|--domain)
