@@ -1,8 +1,12 @@
-# OpenSSH Configuration
-# Author: https://github.com/zZerooneXx
+#########################################################################################
+#################        Name:    OpenSSH Configuration                 #################
+#################        Website: https://apexile.com                   #################
+#################        Author:  ZerooneX <zZerooneXx@gmail.com>       #################
+#################        Github:  https://github.com/zZerooneXx         #################
+#########################################################################################
 
 # change the address and port of the SSH server. 
-ListenAddress 0.0.0.0
+#ListenAddress 0.0.0.0
 Port #change-port
 # only use SSH protocol version 2
 Protocol 2
