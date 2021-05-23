@@ -20,9 +20,6 @@ fi
 #########################################################################################
 
 SOURCE="https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src"
-NGINX=0
-SSH=0
-IPT=0
 SSHPORT=22
 DOMAIN="example.com"
 HOST=$(hostname -I | awk '{ print $1 }')
@@ -44,19 +41,28 @@ for arg in "$@"
 do
     case $arg in
         --nginx)
-        NGINX=1
+        NGINX=true
         shift
         ;;
         --ssh)
-        SSH=1
+        SSH=true
         shift
         ;;
         --ipt)
-        IPT=1
+        IPT=true
+        shift
+        ;;
+        --restart)
+        RESTART=true
         shift
         ;;
         --sshport=*)
         SSHPORT="${arg#*=}"
+        shift
+        ;;
+        --pass)
+        PASSWORD="$2"
+        shift
         shift
         ;;
         -d|--domain)
@@ -71,11 +77,16 @@ do
     esac
 done
 
+if [ "$PASSWORD" ]
+then
+    echo "$PASSWORD" | passwd "root" --stdin
+fi
+
 #########################################################################################
 ###################################### SYSCTL.CONF ######################################
 #########################################################################################
 
-SYSCTL=$(echo "$(curl -s -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/sysctl.conf)" | sed "s/#max_orphan/$MAX_ORPHAN/g" | sed "s/#file_max/$FILE_MAX/g" | sed "s/#min_free/$MIN_FREE/g" | sed "s/#shmmax/$SHMMAX/g" | sed "s/#shmall/$SHMALL/g" | sed "s/#max_tw/$MAX_TW/g")
+SYSCTL=$(echo "$(curl -s -L $SOURCE/sysctl.conf)" | sed "s/#max_orphan/$MAX_ORPHAN/g" | sed "s/#file_max/$FILE_MAX/g" | sed "s/#min_free/$MIN_FREE/g" | sed "s/#shmmax/$SHMMAX/g" | sed "s/#shmall/$SHMALL/g" | sed "s/#max_tw/$MAX_TW/g")
 >/etc/sysctl.conf cat << EOF 
 $SYSCTL
 EOF
@@ -85,8 +96,8 @@ EOF
 ###################################### NGINX.CONF #######################################
 #########################################################################################
 
-if [ $NGINX != 0 ]; then
-NGINX=$(echo "$(curl -s -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/nginx.conf)" | sed "s/example.com/$DOMAIN/g")
+if [ "$NGINX" ]; then
+NGINX=$(echo "$(curl -s -L $SOURCE/nginx.conf)" | sed "s/example.com/$DOMAIN/g")
 >/etc/nginx/nginx.conf cat << EOF 
 $NGINX
 EOF
@@ -96,8 +107,8 @@ fi
 ###################################### SSHD_CONFIG ######################################
 #########################################################################################
 
-if [ $SSH != 0 ]; then
-SSH=$(echo "$(curl -s -L https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/sshd_config)" | sed "s/#change-port/$SSHPORT/g")
+if [ "$SSH" ]; then
+SSH=$(echo "$(curl -s -L $SOURCE/sshd_config)" | sed "s/#change-port/$SSHPORT/g")
 >/etc/ssh/sshd_config cat << EOF 
 $SSH
 EOF
@@ -108,11 +119,13 @@ fi
 ###################################### IPTABLES.SH ######################################
 #########################################################################################
 
-if [ $IPT != 0 ]; then
+if [ "$IPT" ]; then
     curl -s https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/iptables.sh | sh -s -- --ssh=$SSHPORT
 fi
 
-#echo "# Other arguments: ${TAGS[*]}"
-#echo "### FINAL ###"
+if [ "$RESTART" ]
+then
+    shutdown -r now
+fi
 
 exit $?
