@@ -44,7 +44,7 @@ RAGEMP=22005,22006
 for arg in "$@"
 do
     case $arg in
-        -s=*|--ssh=*)
+        --ssh=*)
         SSH="${arg#*=}"
         shift
         ;;

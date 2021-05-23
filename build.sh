@@ -43,19 +43,19 @@ MAX_TW=$(($FILE_MAX*2))
 for arg in "$@"
 do
     case $arg in
-        -n|--nginx)
+        --nginx)
         NGINX=1
         shift
         ;;
-        -s|--ssh)
+        --ssh)
         SSH=1
         shift
         ;;
-        -i|--ipt)
+        --ipt)
         IPT=1
         shift
         ;;
-        -sp=*|--sshport=*)
+        --sshport=*)
         SSHP="${arg#*=}"
         shift
         ;;
@@ -108,7 +108,7 @@ fi
 #########################################################################################
 
 if [ $IPT != 0 ]; then
-    curl -s https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/iptables.sh | sh -s -- -s=$SSHPORT
+    curl -s https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/iptables.sh | sh -s -- --ssh=$SSHPORT
 fi
 
 
