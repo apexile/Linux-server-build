@@ -6,7 +6,7 @@
 #########################################################################################
 
 # change the address and port of the SSH server. 
-#ListenAddress 0.0.0.0
+ListenAddress 0.0.0.0
 Port 22
 # only use SSH protocol version 2
 Protocol 2
