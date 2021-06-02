@@ -28,7 +28,7 @@ _proc() {
 ################################### REMOVE FIREWALLD ####################################
 #########################################################################################
 
-which firewalld
+which firewalld &> /dev/null
 if [ $? -ne 1 ]; then
   _proc "uninstalling the firewalld..."
   systemctl disable firewalld &> /dev/null
@@ -41,7 +41,7 @@ fi
 ################################### INSTALL IPTABLES ####################################
 #########################################################################################
 
-which iptables
+which iptables &> /dev/null
 if [ $? -ne 0 ]; then
   _proc "installing the iptables..."
   dnf -qy install iptables-services
@@ -224,7 +224,7 @@ fi
 iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
 
 # POSTGRESQL
-which psql
+which psql &> /dev/null
 if [ $? -ne 1 ]; then
   POSTGRESQL=$(echo "$(grep '^port = ' /var/lib/pgsql/13/data/postgresql.conf)" | awk '{ print $3 }' | grep -o "[0-9]*")
   if [ -z "$POSTGRESQL" ]; then
@@ -234,7 +234,7 @@ if [ $? -ne 1 ]; then
 fi
 
 # RAGEMP
-which ragemp
+which ragemp &> /dev/null
 if [ $? -ne 1 ]; then
   RAGEMP=22005,22006
   iptables -A INPUT -p tcp -m multiport --dports $RAGEMP -j ACCEPT
