@@ -6,23 +6,39 @@
 #################        GitHub:  https://github.com/zZerooneXx         #################
 #########################################################################################
 
+__purple() {
+  printf '\33[1;35m%b\33[0m' "$1"
+}
+
 __green() {
   printf '\33[1;32m%b\33[0m' "$1"
 }
 
-__yellow() {
-  printf '\33[1;33m%b\33[0m' "$1"
-}
-
-_success() {
-  __green "$@" >&2
-  printf "\n" >&2
+__cyan() {
+  printf '\33[1;36m%b\33[0m' "$1"
 }
 
 _proc() {
-  __yellow "$@" >&2
-  printf "\n" >&2
+  __purple "[$(date)] " >&1
+  __cyan "$@" >&1
+  printf "\n" >&1
 }
+
+_success() {
+  __purple "[$(date)] " >&1
+  __green "$@" >&1
+  printf "\n" >&1
+}
+
+HTTP=80,443,444,8080,8443
+_SSHDFILE="/etc/ssh/sshd_config"
+if [ -f "$_SSHDFILE" ]; then
+    SSH=$(echo "$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)")
+else
+  if [ -z "$SSH" ]; then
+    SSH="22"
+  fi
+fi
 
 #########################################################################################
 ################################### REMOVE FIREWALLD ####################################
@@ -45,7 +61,7 @@ which iptables &> /dev/null
 if [ $? -ne 0 ]; then
   _proc "installing the iptables..."
   dnf -qy install iptables-services
-  systemctl enable iptables
+  systemctl enable iptables &> /dev/null
   _success "iptables successfully installed!"
 fi
 
@@ -183,8 +199,7 @@ iptables -A INPUT -p tcp -m multiport --dports $HTTP -j HTTP_DOS
 ############################# Anti-Attack: IDENT port probe #############################
 #########################################################################################
 
-IDENT=113
-iptables -A INPUT -p tcp -m multiport --dports $IDENT -j REJECT --reject-with tcp-reset
+iptables -A INPUT -p tcp -m multiport --dports 113 -j REJECT --reject-with tcp-reset
 
 #########################################################################################
 ############################# Anti-Attack: SSH Brute Force ##############################
@@ -213,22 +228,20 @@ iptables -A INPUT -d 224.0.0.1         -j DROP
 iptables -A INPUT -p icmp -j ACCEPT
 
 # HTTP, HTTPS
-HTTP=80,443,444,8080,8443
 iptables -A INPUT -p tcp -m multiport --dports $HTTP -j ACCEPT
 
 # SSH
-SSH=$(echo "$(grep '^Port' /etc/ssh/sshd_config)" | awk '{ print $2 }' | grep -o "[0-9]*")
-if [ -z "$SSH" ]; then
-  SSH="22"
-fi
 iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
 
 # POSTGRESQL
 which psql &> /dev/null
 if [ $? -ne 1 ]; then
-  POSTGRESQL=$(echo "$(grep '^port = ' /var/lib/pgsql/13/data/postgresql.conf)" | awk '{ print $3 }' | grep -o "[0-9]*")
-  if [ -z "$POSTGRESQL" ]; then
-  POSTGRESQL="5432"
+  if [ -f "$_PSGFILE" ]; then
+    POSTGRESQL=$(echo "$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE)")
+  else
+    if [ -z "$POSTGRESQL" ]; then
+      POSTGRESQL="5432"
+    fi
   fi
   iptables -A INPUT -p tcp -m multiport --dports $POSTGRESQL -j ACCEPT
 fi
