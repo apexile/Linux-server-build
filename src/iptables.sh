@@ -1,10 +1,28 @@
 #!/bin/bash
 #########################################################################################
-#################        Name:    FireWall script                       #################
+#################        Name:    FireWall Rules                        #################
 #################        Website: https://apexile.com                   #################
 #################        Author:  ZerooneX <zZerooneXx@gmail.com>       #################
-#################        Github:  https://github.com/zZerooneXx         #################
+#################        GitHub:  https://github.com/zZerooneXx         #################
 #########################################################################################
+
+__green() {
+  printf '\33[1;32m%b\33[0m' "$1"
+}
+
+__yellow() {
+  printf '\33[1;33m%b\33[0m' "$1"
+}
+
+_success() {
+  __green "$@" >&2
+  printf "\n" >&2
+}
+
+_proc() {
+  __yellow "$@" >&2
+  printf "\n" >&2
+}
 
 #########################################################################################
 ################################### REMOVE FIREWALLD ####################################
@@ -12,9 +30,11 @@
 
 which firewalld
 if [ $? -ne 1 ]; then
-    systemctl disable firewalld
-    systemctl stop firewalld
-    dnf remove firewalld -y
+  _proc "uninstalling the firewalld..."
+  systemctl disable firewalld &> /dev/null
+  systemctl stop firewalld
+  dnf -qy remove firewalld
+  _success "firewalld successfully uninstalled!"
 fi
 
 #########################################################################################
@@ -23,33 +43,11 @@ fi
 
 which iptables
 if [ $? -ne 0 ]; then
-    dnf install iptables-services -y
-    systemctl enable iptables
+  _proc "installing the iptables..."
+  dnf -qy install iptables-services
+  systemctl enable iptables
+  _success "iptables successfully installed!"
 fi
-
-#########################################################################################
-######################################### PORTS #########################################
-#########################################################################################
-
-SSH=22
-HTTP=80,443,444,8080,8443
-POSTGRESQL=5432
-IDENT=113
-RAGEMP=22005,22006
-
-#########################################################################################
-####################################### ARGUMENTS #######################################
-#########################################################################################
-
-for arg in "$@"
-do
-    case $arg in
-        --ssh=*)
-        SSH="${arg#*=}"
-        shift
-        ;;
-    esac
-done
 
 #########################################################################################
 ##################################### ANTI SPOOFING #####################################
@@ -57,10 +55,10 @@ done
 
 if [ -e /proc/sys/net/ipv4/conf/all/rp_filter ]
 then
-    for filter in /proc/sys/net/ipv4/conf/*/rp_filter
-    do
-        echo 1 > $filter
-    done
+  for filter in /proc/sys/net/ipv4/conf/*/rp_filter
+  do
+    echo 1 > $filter
+  done
 fi
 
 #########################################################################################
@@ -185,6 +183,7 @@ iptables -A INPUT -p tcp -m multiport --dports $HTTP -j HTTP_DOS
 ############################# Anti-Attack: IDENT port probe #############################
 #########################################################################################
 
+IDENT=113
 iptables -A INPUT -p tcp -m multiport --dports $IDENT -j REJECT --reject-with tcp-reset
 
 #########################################################################################
@@ -214,17 +213,33 @@ iptables -A INPUT -d 224.0.0.1         -j DROP
 iptables -A INPUT -p icmp -j ACCEPT
 
 # HTTP, HTTPS
+HTTP=80,443,444,8080,8443
 iptables -A INPUT -p tcp -m multiport --dports $HTTP -j ACCEPT
 
 # SSH
+SSH=$(echo "$(grep '^Port' /etc/ssh/sshd_config)" | awk '{ print $2 }' | grep -o "[0-9]*")
+if [ -z "$SSH" ]; then
+  SSH="22"
+fi
 iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
 
 # POSTGRESQL
-iptables -A INPUT -p tcp -m multiport --dports $POSTGRESQL -j ACCEPT
+which psql
+if [ $? -ne 1 ]; then
+  POSTGRESQL=$(echo "$(grep '^port = ' /var/lib/pgsql/13/data/postgresql.conf)" | awk '{ print $3 }' | grep -o "[0-9]*")
+  if [ -z "$POSTGRESQL" ]; then
+  POSTGRESQL="5432"
+  fi
+  iptables -A INPUT -p tcp -m multiport --dports $POSTGRESQL -j ACCEPT
+fi
 
 # RAGEMP
-iptables -A INPUT -p tcp -m multiport --dports $RAGEMP -j ACCEPT
-iptables -A INPUT -p udp -m multiport --dports $RAGEMP -j ACCEPT
+which ragemp
+if [ $? -ne 1 ]; then
+  RAGEMP=22005,22006
+  iptables -A INPUT -p tcp -m multiport --dports $RAGEMP -j ACCEPT
+  iptables -A INPUT -p udp -m multiport --dports $RAGEMP -j ACCEPT
+fi
 
 #########################################################################################
 ############ Log and discard anything that does not apply to the above rules ############
@@ -236,6 +251,5 @@ iptables -A INPUT -j DROP
 /sbin/iptables-save  > /etc/sysconfig/iptables
 
 systemctl start iptables
-systemctl restart iptables
 
 exit $?
