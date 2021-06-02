@@ -12,8 +12,6 @@ Port 22
 Protocol 2
 # only listen to IPv4
 AddressFamily inet
-# SSH connections from anywhere to access the users
-#AllowUsers ZerooneX
 # allow root logged in via SSH
 PermitRootLogin yes
 # maximum number of repeated authentication attempts
@@ -69,6 +67,8 @@ Subsystem sftp internal-sftp
 HostKey /etc/ssh/ssh_host_rsa_key
 HostKey /etc/ssh/ssh_host_ecdsa_key
 HostKey /etc/ssh/ssh_host_ed25519_key
+# SSH connections from anywhere to access the users
+#AllowUsers ZerooneX
 # User to send logs
 Match User banneduser
     ForceCommand internal-sftp -P read,remove,mkdir,rmdir,rename,posix-rename
