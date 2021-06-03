@@ -33,7 +33,7 @@ _success() {
 HTTP=80,443,444,8080,8443
 _SSHDFILE="/etc/ssh/sshd_config"
 if [ -f "$_SSHDFILE" ]; then
-    SSH=$(echo "$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)")
+  SSH=$(echo "$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)")
 else
   if [ -z "$SSH" ]; then
     SSH="22"
@@ -44,10 +44,10 @@ fi
 ################################### REMOVE FIREWALLD ####################################
 #########################################################################################
 
-which firewalld &> /dev/null
+which firewalld &>/dev/null
 if [ $? -ne 1 ]; then
   _proc "uninstalling the firewalld..."
-  systemctl disable firewalld &> /dev/null
+  systemctl disable firewalld &>/dev/null
   systemctl stop firewalld
   dnf -qy remove firewalld
   _success "firewalld successfully uninstalled!"
@@ -57,11 +57,11 @@ fi
 ################################### INSTALL IPTABLES ####################################
 #########################################################################################
 
-which iptables &> /dev/null
+which iptables &>/dev/null
 if [ $? -ne 0 ]; then
   _proc "installing the iptables..."
   dnf -qy install iptables-services
-  systemctl enable iptables &> /dev/null
+  systemctl enable iptables &>/dev/null
   _success "iptables successfully installed!"
 fi
 
@@ -69,11 +69,9 @@ fi
 ##################################### ANTI SPOOFING #####################################
 #########################################################################################
 
-if [ -e /proc/sys/net/ipv4/conf/all/rp_filter ]
-then
-  for filter in /proc/sys/net/ipv4/conf/*/rp_filter
-  do
-    echo 1 > $filter
+if [ -e /proc/sys/net/ipv4/conf/all/rp_filter ]; then
+  for filter in /proc/sys/net/ipv4/conf/*/rp_filter; do
+    echo 1 >$filter
   done
 fi
 
@@ -94,10 +92,10 @@ iptables -t mangle -F
 iptables -t mangle -X
 iptables -t mangle -Z
 # set default policy
-iptables -P INPUT   ACCEPT
-iptables -P OUTPUT  ACCEPT
+iptables -P INPUT ACCEPT
+iptables -P OUTPUT ACCEPT
 iptables -P FORWARD ACCEPT
-iptables -P INPUT   DROP
+iptables -P INPUT DROP
 iptables -P FORWARD DROP
 # accept traffic from loopback interface (localhost).
 iptables -A INPUT -i lo -j ACCEPT
@@ -114,16 +112,16 @@ iptables -A STEALTH_SCAN -j DROP
 
 # stealth scan-like packets jump to the "STEALTH_SCAN" chain
 iptables -A INPUT -p tcp --tcp-flags SYN,ACK SYN,ACK -m state --state NEW -j STEALTH_SCAN
-iptables -A INPUT -p tcp --tcp-flags ALL NONE                             -j STEALTH_SCAN
+iptables -A INPUT -p tcp --tcp-flags ALL NONE -j STEALTH_SCAN
 
-iptables -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN                      -j STEALTH_SCAN
-iptables -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST                      -j STEALTH_SCAN
-iptables -A INPUT -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG              -j STEALTH_SCAN
+iptables -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN -j STEALTH_SCAN
+iptables -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST -j STEALTH_SCAN
+iptables -A INPUT -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j STEALTH_SCAN
 
-iptables -A INPUT -p tcp --tcp-flags FIN,RST FIN,RST                      -j STEALTH_SCAN
-iptables -A INPUT -p tcp --tcp-flags ACK,FIN FIN                          -j STEALTH_SCAN
-iptables -A INPUT -p tcp --tcp-flags ACK,PSH PSH                          -j STEALTH_SCAN
-iptables -A INPUT -p tcp --tcp-flags ACK,URG URG                          -j STEALTH_SCAN
+iptables -A INPUT -p tcp --tcp-flags FIN,RST FIN,RST -j STEALTH_SCAN
+iptables -A INPUT -p tcp --tcp-flags ACK,FIN FIN -j STEALTH_SCAN
+iptables -A INPUT -p tcp --tcp-flags ACK,PSH PSH -j STEALTH_SCAN
+iptables -A INPUT -p tcp --tcp-flags ACK,URG URG -j STEALTH_SCAN
 
 #########################################################################################
 ############# Anti-Attack: Port scanning with fragment packets, DOS attacks #############
@@ -138,13 +136,13 @@ iptables -A INPUT -f -j DROP
 
 iptables -N PING_OF_DEATH # make a chain with the name "PING_OF_DEATH"
 iptables -A PING_OF_DEATH -p icmp --icmp-type echo-request \
-         -m hashlimit \
-         --hashlimit 1/s \
-         --hashlimit-burst 10 \
-         --hashlimit-htable-expire 300000 \
-         --hashlimit-mode srcip \
-         --hashlimit-name t_PING_OF_DEATH \
-         -j RETURN
+  -m hashlimit \
+  --hashlimit 1/s \
+  --hashlimit-burst 10 \
+  --hashlimit-htable-expire 300000 \
+  --hashlimit-mode srcip \
+  --hashlimit-name t_PING_OF_DEATH \
+  -j RETURN
 
 # discard ICMP that exceeds the limit
 iptables -A PING_OF_DEATH -j LOG --log-prefix "ping_of_death_attack: "
@@ -159,13 +157,13 @@ iptables -A INPUT -p icmp --icmp-type echo-request -j PING_OF_DEATH
 
 iptables -N SYN_FLOOD # make a chain with the name "SYN_FLOOD"
 iptables -A SYN_FLOOD -p tcp --syn \
-         -m hashlimit \
-         --hashlimit 200/s \
-         --hashlimit-burst 3 \
-         --hashlimit-htable-expire 300000 \
-         --hashlimit-mode srcip \
-         --hashlimit-name t_SYN_FLOOD \
-         -j RETURN
+  -m hashlimit \
+  --hashlimit 200/s \
+  --hashlimit-burst 3 \
+  --hashlimit-htable-expire 300000 \
+  --hashlimit-mode srcip \
+  --hashlimit-name t_SYN_FLOOD \
+  -j RETURN
 
 # discard SYN packets that exceed the limit
 iptables -A SYN_FLOOD -j LOG --log-prefix "syn_flood_attack: "
@@ -180,13 +178,13 @@ iptables -A INPUT -p tcp --syn -j SYN_FLOOD
 
 iptables -N HTTP_DOS # make a chain with the name "HTTP_DOS"
 iptables -A HTTP_DOS -p tcp -m multiport --dports $HTTP \
-         -m hashlimit \
-         --hashlimit 1/s \
-         --hashlimit-burst 100 \
-         --hashlimit-htable-expire 300000 \
-         --hashlimit-mode srcip \
-         --hashlimit-name t_HTTP_DOS \
-         -j RETURN
+  -m hashlimit \
+  --hashlimit 1/s \
+  --hashlimit-burst 100 \
+  --hashlimit-htable-expire 300000 \
+  --hashlimit-mode srcip \
+  --hashlimit-name t_HTTP_DOS \
+  -j RETURN
 
 # discard connections that exceed the limit
 iptables -A HTTP_DOS -j LOG --log-prefix "http_dos_attack: "
@@ -213,12 +211,12 @@ iptables -A INPUT -p tcp --syn -m multiport --dports $SSH -m recent --name ssh_a
 ## Packets destined for all hosts (broadcast address, multicast address) are discarded ##
 #########################################################################################
 
-iptables -A INPUT -d 192.168.1.255     -j LOG --log-prefix "drop_broadcast: "
-iptables -A INPUT -d 192.168.1.255     -j DROP
-iptables -A INPUT -d 255.255.255.255   -j LOG --log-prefix "drop_broadcast: "
-iptables -A INPUT -d 255.255.255.255   -j DROP
-iptables -A INPUT -d 224.0.0.1         -j LOG --log-prefix "drop_broadcast: "
-iptables -A INPUT -d 224.0.0.1         -j DROP
+iptables -A INPUT -d 192.168.1.255 -j LOG --log-prefix "drop_broadcast: "
+iptables -A INPUT -d 192.168.1.255 -j DROP
+iptables -A INPUT -d 255.255.255.255 -j LOG --log-prefix "drop_broadcast: "
+iptables -A INPUT -d 255.255.255.255 -j DROP
+iptables -A INPUT -d 224.0.0.1 -j LOG --log-prefix "drop_broadcast: "
+iptables -A INPUT -d 224.0.0.1 -j DROP
 
 #########################################################################################
 ############################ Input permission from all hosts ############################
@@ -234,7 +232,7 @@ iptables -A INPUT -p tcp -m multiport --dports $HTTP -j ACCEPT
 iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
 
 # POSTGRESQL
-which psql &> /dev/null
+which psql &>/dev/null
 if [ $? -ne 1 ]; then
   if [ -f "$_PSGFILE" ]; then
     POSTGRESQL=$(echo "$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE)")
@@ -247,7 +245,7 @@ if [ $? -ne 1 ]; then
 fi
 
 # RAGEMP
-which ragemp &> /dev/null
+which ragemp &>/dev/null
 if [ $? -ne 1 ]; then
   RAGEMP=22005,22006
   iptables -A INPUT -p tcp -m multiport --dports $RAGEMP -j ACCEPT
@@ -261,7 +259,7 @@ fi
 iptables -A INPUT -j LOG --log-prefix "drop: "
 iptables -A INPUT -j DROP
 
-/sbin/iptables-save  > /etc/sysconfig/iptables
+/sbin/iptables-save >/etc/sysconfig/iptables
 
 systemctl start iptables
 
