@@ -8,9 +8,9 @@
 
 _SRC="https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src"
 
-which bc &> /dev/null
+which bc &>/dev/null
 if [ $? -ne 0 ]; then
-    dnf -qy install bc
+  dnf -qy install bc
 fi
 
 _startswith() {
@@ -95,15 +95,14 @@ _checkSudo() {
 }
 
 _openPort() {
-  which firewalld &> /dev/null
+  which firewalld &>/dev/null
   if [ $? -ne 1 ]; then
-    for i in ${1//,/ }
-    do
-      firewall-cmd --zone=public --permanent --add-port=${i}/tcp &> /dev/null
+    for i in ${1//,/ }; do
+      firewall-cmd --zone=public --permanent --add-port=${i}/tcp &>/dev/null
     done
     systemctl restart firewalld
-  else 
-    which iptables &> /dev/null
+  else
+    which iptables &>/dev/null
     if [ $? -ne 1 ]; then
       iptables -A INPUT -p tcp -m multiport --dports $1 -j ACCEPT
       systemctl restart iptables
@@ -112,31 +111,31 @@ _openPort() {
 }
 
 _psg_eof() {
->/var/lib/pgsql/13/data/postgresql.conf cat << EOF
-$(echo "$(curl -s -L $_SRC/postgresql.conf)" | 
-sed "s/'\*'/'$_HOST'/g" | 
-sed "s/port = 5432/port = $_PGPORT/g" | 
-sed "s~#timezone~$_TIMEZONE~g" | 
-sed "s/max_connections = 20/max_connections = $_PGCONN/g" | 
-sed "s/#shared_buffers/$(echo "$_MEM_MB * 0.25" | bc | cut -f 1 -d '.')MB/g" | 
-sed "s/#effective_cache_size/$(echo "$_MEM_MB * 0.75" | bc | cut -f 1 -d '.')MB/g" | 
-sed "s/#maintenance_work_mem/$(echo "$_MEM_MB * 0.05" | bc | cut -f 1 -d '.')MB/g" | 
-sed "s/#work_mem/$(echo "($_MEM_MB / $_PGCONN) * 0.25" | bc | cut -f 1 -d '.')MB/g" | 
-sed "s/#temp_buffers/$(echo "($_MEM_MB / $_PGCONN) * 0.4" | bc | cut -f 1 -d '.')MB/g" | 
-sed "s/#numcore/$(echo "$_NUMCORE")/g" | 
-sed "s/#avgnumcore/$(echo "$_AVG_NUMCORE" | bc | cut -f 1 -d '.')/g" | 
-sed "s/#max_stack_depth/$(echo "$_STACKSIZE * 0.80" | bc | cut -f 1 -d '.')MB/g")
+  cat >/var/lib/pgsql/13/data/postgresql.conf <<EOF
+$(echo "$(curl -s -L $_SRC/postgresql.conf)" |
+    sed "s/'\*'/'$_HOST'/g" |
+    sed "s/port = 5432/port = $_PGPORT/g" |
+    sed "s~#timezone~$_TIMEZONE~g" |
+    sed "s/max_connections = 20/max_connections = $_PGCONN/g" |
+    sed "s/#shared_buffers/$(echo "$_MEM_MB * 0.25" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#effective_cache_size/$(echo "$_MEM_MB * 0.75" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#maintenance_work_mem/$(echo "$_MEM_MB * 0.05" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#work_mem/$(echo "($_MEM_MB / $_PGCONN) * 0.25" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#temp_buffers/$(echo "($_MEM_MB / $_PGCONN) * 0.4" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#numcore/$(echo "$_NUMCORE")/g" |
+    sed "s/#avgnumcore/$(echo "$_AVG_NUMCORE" | bc | cut -f 1 -d '.')/g" |
+    sed "s/#max_stack_depth/$(echo "$_STACKSIZE * 0.80" | bc | cut -f 1 -d '.')MB/g")
 EOF
 }
 
 _pg_hba_eof() {
->/var/lib/pgsql/13/data/pg_hba.conf cat << EOF
+  cat >/var/lib/pgsql/13/data/pg_hba.conf <<EOF
 $(echo "$(curl -s -L $_SRC/pg_hba.conf)")
 EOF
 }
 
 _pgdb_eof() {
-su postgres <<EOF
+  su postgres <<EOF
 psql -c "CREATE DATABASE $_PGDB"
 psql -c "ALTER USER postgres WITH PASSWORD '$_PGPASS';"
 psql -c "GRANT ALL privileges ON DATABASE $_PGDB TO postgres;"
@@ -144,29 +143,29 @@ EOF
 }
 
 _sys_eof() {
->/etc/sysctl.conf cat << EOF
-$(echo "$(curl -s -L $_SRC/sysctl.conf)" | 
-sed "s/#max_orphan/$(echo "$_MEM_BYTES * 0.10 / 65536" | bc | cut -f 1 -d '.')/g" | 
-sed "s/#file_max/$(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.')/g" | 
-sed "s/#min_free/$(echo "($_MEM_BYTES / 1024) * 0.01" | bc | cut -f 1 -d '.')/g" | 
-sed "s/#shmmax/$(echo "$_MEM_BYTES * 0.90" | bc | cut -f 1 -d '.')/g" | 
-sed "s/#shmall/$(expr $_MEM_BYTES / $(getconf PAGE_SIZE))/g" | 
-sed "s/#max_tw/$(($(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.')*2))/g")
+  cat >/etc/sysctl.conf <<EOF
+$(echo "$(curl -s -L $_SRC/sysctl.conf)" |
+    sed "s/#max_orphan/$(echo "$_MEM_BYTES * 0.10 / 65536" | bc | cut -f 1 -d '.')/g" |
+    sed "s/#file_max/$(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.')/g" |
+    sed "s/#min_free/$(echo "($_MEM_BYTES / 1024) * 0.01" | bc | cut -f 1 -d '.')/g" |
+    sed "s/#shmmax/$(echo "$_MEM_BYTES * 0.90" | bc | cut -f 1 -d '.')/g" |
+    sed "s/#shmall/$(expr $_MEM_BYTES / $(getconf PAGE_SIZE))/g" |
+    sed "s/#max_tw/$(($(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.') * 2))/g")
 EOF
 }
 
 _ssh_eof() {
->/etc/ssh/sshd_config cat << EOF
-$(echo "$(curl -s -L $_SRC/sshd_config)" | 
-sed "s/ListenAddress 0.0.0.0/ListenAddress $_HOST/g" | 
-sed "s/Port 22/Port $_SSHPORT/g")
+  cat >/etc/ssh/sshd_config <<EOF
+$(echo "$(curl -s -L $_SRC/sshd_config)" |
+    sed "s/ListenAddress 0.0.0.0/ListenAddress $_HOST/g" |
+    sed "s/Port 22/Port $_SSHPORT/g")
 EOF
 }
 
 _nginx_eof() {
->/etc/nginx/nginx.conf cat << EOF
-$(echo "$(curl -s -L $_SRC/nginx.conf)" | 
-sed "s/domain.tld/$_DOMAIN/g")
+  cat >/etc/nginx/nginx.conf <<EOF
+$(echo "$(curl -s -L $_SRC/nginx.conf)" |
+    sed "s/domain.tld/$_DOMAIN/g")
 EOF
 }
 
@@ -176,7 +175,8 @@ _sys() {
     _sys_eof
     /sbin/sysctl -e -p /etc/sysctl.conf >/dev/null 2>&1
     _success "sysctl.conf successfully installed!"
-  else _err "sys unknown..."
+  else
+    _err "sys unknown..."
   fi
 }
 
@@ -186,38 +186,38 @@ _ssh() {
   else
     _SSHDFILE="/etc/ssh/sshd_config"
     if [ -f "$_SSHDFILE" ]; then
-        _SSHPORT=$(echo "$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)")
+      _SSHPORT=$(echo "$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)")
     fi
-  if [ -z "${arg[0]//[0-9]}" ] && [ -n "${arg[0]}" ]; then
-    _SSHPORT="${arg[0]}"
-    _openPort "$_SSHPORT"
-  fi
-  if [ -z "$_SSHPORT" ]; then
-    _SSHPORT="22"
-  fi
-  _proc "installing the sshd_config..."
-  _ssh_eof
-  systemctl restart sshd
-  _success "sshd_config successfully installed!"
+    if [ -z "${arg[0]//[0-9]/}" ] && [ -n "${arg[0]}" ]; then
+      _SSHPORT="${arg[0]}"
+      _openPort "$_SSHPORT"
+    fi
+    if [ -z "$_SSHPORT" ]; then
+      _SSHPORT="22"
+    fi
+    _proc "installing the sshd_config..."
+    _ssh_eof
+    systemctl restart sshd
+    _success "sshd_config successfully installed!"
   fi
 }
 
 _psg() {
   if [ "${_CMD}" = "pkg" ]; then
-    which psql &> /dev/null
+    which psql &>/dev/null
     if [ $? -ne 0 ]; then
       _proc "installing the PostgreSQL..."
       dnf -qy module disable postgresql
       dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm
-      dnf -qy install postgresql13-server &> /dev/null
-      /usr/pgsql-13/bin/postgresql-13-setup initdb &> /dev/null
-      systemctl enable postgresql-13 &> /dev/null
+      dnf -qy install postgresql13-server &>/dev/null
+      /usr/pgsql-13/bin/postgresql-13-setup initdb &>/dev/null
+      systemctl enable postgresql-13 &>/dev/null
       systemctl start postgresql-13
       if [ "${arg[0]}" ] && [ "${arg[1]}" ]; then
         _PGDB="${arg[0]}"
         _PGPASS="${arg[1]}"
-        echo "$_PGPASS" | passwd "postgres" --stdin &> /dev/null
-        _pgdb_eof &> /dev/null
+        echo "$_PGPASS" | passwd "postgres" --stdin &>/dev/null
+        _pgdb_eof &>/dev/null
       fi
       systemctl restart postgresql-13
       _success "PostgreSQL successfully installed!"
@@ -225,33 +225,33 @@ _psg() {
       _warn "PostgreSQL is already installed!"
     fi
   fi
-  
+
   if [ "${_CMD}" = "cfg" ]; then
-    which psql &> /dev/null
+    which psql &>/dev/null
     if [ $? -ne 1 ]; then
       _PSGFILE="/var/lib/pgsql/13/data/postgresql.conf"
       if [ -f "$_PSGFILE" ]; then
         _PGPORT=$(echo "$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE)")
         _PGCONN=$(echo "$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE)")
       fi
-      if [ -z "${arg[0]//[0-9]}" ] && [ -n "${arg[0]}" ]; then
+      if [ -z "${arg[0]//[0-9]/}" ] && [ -n "${arg[0]}" ]; then
         _PGPORT="${arg[0]}"
         _openPort "$_PGPORT"
       fi
-      if [ -z "${arg[1]//[0-9]}" ] && [ -n "${arg[1]}" ]; then
+      if [ -z "${arg[1]//[0-9]/}" ] && [ -n "${arg[1]}" ]; then
         _PGCONN="${arg[1]}"
       fi
       if [ -z "$_PGPORT" ]; then
         _PGPORT="5432"
         _openPort "$_PGPORT"
       fi
-      if [ -z "$_PGCONN" ] || (( $_PGCONN < "20" )); then
+      if [ -z "$_PGCONN" ] || (($_PGCONN < "20")); then
         _PGCONN="20"
       fi
-      if (( $_AVG_NUMCORE > "4" )); then
+      if (($_AVG_NUMCORE > "4")); then
         _AVG_NUMCORE="4"
       else
-        if (( $_AVG_NUMCORE < "1" )); then
+        if (($_AVG_NUMCORE < "1")); then
           _AVG_NUMCORE="1"
         fi
       fi
@@ -270,7 +270,7 @@ _psg() {
 
 _nginx() {
   if [ "${_CMD}" = "pkg" ]; then
-    which nginx &> /dev/null
+    which nginx &>/dev/null
     if [ $? -ne 0 ]; then
       _proc "installing NGINX..."
       dnf -qy module disable php
@@ -288,7 +288,7 @@ _nginx() {
   fi
 
   if [ "${_CMD}" = "cfg" ]; then
-    which nginx &> /dev/null
+    which nginx &>/dev/null
     if [ $? -ne 1 ]; then
       if [ "${arg[0]}" ]; then
         _DOMAIN="${arg[0]}"
@@ -318,7 +318,7 @@ _rmipv6() {
   _GRUBFILE=/etc/default/grub
   grep -Eq "ipv6.disable" $_GRUBFILE || sed -i 's/^GRUB_CMDLINE_LINUX="/&ipv6.disable=1 /' $_GRUBFILE
   grep -Eq "ipv6.disable=0" $_GRUBFILE | sed -i 's/ipv6.disable=0/ipv6.disable=1/' $_GRUBFILE
-  grub2-mkconfig -o /boot/grub2/grub.cfg &> /dev/null
+  grub2-mkconfig -o /boot/grub2/grub.cfg &>/dev/null
   _success "IPv6 interface successfully Removed!"
 }
 
@@ -328,19 +328,19 @@ install() {
     return 1
   fi
 
-  for i in ${1//,/ }
-    do
-      _params=$(echo "$i" | \grep -Po '(?<=\[).*(?=\])')
-      arg=(${_params//\// })
-      for j in "${!arg[@]}"; do : 
-      done
-      _i=$(echo "_$i" | sed 's/\[.*]//' )
-      $_i 2> /dev/null || _err "Unknown : ${_i:1}"
+  for i in ${1//,/ }; do
+    _params=$(echo "$i" | \grep -Po '(?<=\[).*(?=\])')
+    arg=(${_params//\// })
+    for j in "${!arg[@]}"; do
+      :
+    done
+    _i=$(echo "_$i" | sed 's/\[.*]//')
+    $_i 2>/dev/null || _err "Unknown : ${_i:1}"
   done
 }
 
 showhelp() {
-__cyan "Usage: build.sh <command> ... [parameters ...]
+  __cyan "Usage: build.sh <command> ... [parameters ...]
 Commands:
   -h, --help                        Show this help message.
   --pkg                             Install Packages from Repositories.
@@ -351,7 +351,7 @@ Parameters:
   -i <...[.../]>                    Which package / configuration to install and, 
                                     if necessary, set the parameters in [.../]
                                     See: $_SRC" >&2
-printf "\n" >&2
+  printf "\n" >&2
 }
 
 _process() {
@@ -413,27 +413,30 @@ _process() {
 
   if [ "${_CMD}" ]; then
     if ! _checkSudo; then
-        _err "It seems that you are using sudo"
-        return 1
+      _err "It seems that you are using sudo"
+      return 1
     fi
   fi
 
   case "${_CMD}" in
-    pkg) install "$_i" ;;
-    cfg) install "$_i" ;;
-    *)
-      if [ "$_CMD" ]; then
-        _err "Invalid command: $_CMD"
-      fi
-      showhelp
-      return 1
-      ;;
+  pkg) install "$_i" ;;
+  cfg) install "$_i" ;;
+  *)
+    if [ "$_CMD" ]; then
+      _err "Invalid command: $_CMD"
+    fi
+    showhelp
+    return 1
+    ;;
   esac
 }
 
 main() {
   [ -z "$1" ] && showhelp && return
-  if _startswith "$1" '-'; then _process "$@"; else _err "Invalid command: $@"; showhelp; fi
+  if _startswith "$1" '-'; then _process "$@"; else
+    _err "Invalid command: $@"
+    showhelp
+  fi
 }
 
 main "$@"
