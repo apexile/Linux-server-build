@@ -33,7 +33,7 @@ _success() {
 HTTP=80,443,444,8080,8443
 _SSHDFILE="/etc/ssh/sshd_config"
 if [ -f "$_SSHDFILE" ]; then
-  SSH=$(echo "$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)")
+  SSH=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)
 else
   if [ -z "$SSH" ]; then
     SSH="22"
@@ -43,9 +43,7 @@ fi
 #########################################################################################
 ################################### REMOVE FIREWALLD ####################################
 #########################################################################################
-
-which firewalld &>/dev/null
-if [ $? -ne 1 ]; then
+if which firewalld; then
   _proc "uninstalling the firewalld..."
   systemctl disable firewalld &>/dev/null
   systemctl stop firewalld
@@ -57,8 +55,7 @@ fi
 ################################### INSTALL IPTABLES ####################################
 #########################################################################################
 
-which iptables &>/dev/null
-if [ $? -ne 0 ]; then
+if ! which iptables; then
   _proc "installing the iptables..."
   dnf -qy install iptables-services
   systemctl enable iptables &>/dev/null
@@ -71,7 +68,7 @@ fi
 
 if [ -e /proc/sys/net/ipv4/conf/all/rp_filter ]; then
   for filter in /proc/sys/net/ipv4/conf/*/rp_filter; do
-    echo 1 >$filter
+    echo 1 >"$filter"
   done
 fi
 
@@ -136,13 +133,13 @@ iptables -A INPUT -f -j DROP
 
 iptables -N PING_OF_DEATH # make a chain with the name "PING_OF_DEATH"
 iptables -A PING_OF_DEATH -p icmp --icmp-type echo-request \
-  -m hashlimit \
-  --hashlimit 1/s \
-  --hashlimit-burst 10 \
-  --hashlimit-htable-expire 300000 \
-  --hashlimit-mode srcip \
-  --hashlimit-name t_PING_OF_DEATH \
-  -j RETURN
+-m hashlimit \
+--hashlimit 1/s \
+--hashlimit-burst 10 \
+--hashlimit-htable-expire 300000 \
+--hashlimit-mode srcip \
+--hashlimit-name t_PING_OF_DEATH \
+-j RETURN
 
 # discard ICMP that exceeds the limit
 iptables -A PING_OF_DEATH -j LOG --log-prefix "ping_of_death_attack: "
@@ -157,13 +154,13 @@ iptables -A INPUT -p icmp --icmp-type echo-request -j PING_OF_DEATH
 
 iptables -N SYN_FLOOD # make a chain with the name "SYN_FLOOD"
 iptables -A SYN_FLOOD -p tcp --syn \
-  -m hashlimit \
-  --hashlimit 200/s \
-  --hashlimit-burst 3 \
-  --hashlimit-htable-expire 300000 \
-  --hashlimit-mode srcip \
-  --hashlimit-name t_SYN_FLOOD \
-  -j RETURN
+-m hashlimit \
+--hashlimit 200/s \
+--hashlimit-burst 3 \
+--hashlimit-htable-expire 300000 \
+--hashlimit-mode srcip \
+--hashlimit-name t_SYN_FLOOD \
+-j RETURN
 
 # discard SYN packets that exceed the limit
 iptables -A SYN_FLOOD -j LOG --log-prefix "syn_flood_attack: "
@@ -178,13 +175,13 @@ iptables -A INPUT -p tcp --syn -j SYN_FLOOD
 
 iptables -N HTTP_DOS # make a chain with the name "HTTP_DOS"
 iptables -A HTTP_DOS -p tcp -m multiport --dports $HTTP \
-  -m hashlimit \
-  --hashlimit 1/s \
-  --hashlimit-burst 100 \
-  --hashlimit-htable-expire 300000 \
-  --hashlimit-mode srcip \
-  --hashlimit-name t_HTTP_DOS \
-  -j RETURN
+-m hashlimit \
+--hashlimit 1/s \
+--hashlimit-burst 100 \
+--hashlimit-htable-expire 300000 \
+--hashlimit-mode srcip \
+--hashlimit-name t_HTTP_DOS \
+-j RETURN
 
 # discard connections that exceed the limit
 iptables -A HTTP_DOS -j LOG --log-prefix "http_dos_attack: "
@@ -232,10 +229,9 @@ iptables -A INPUT -p tcp -m multiport --dports $HTTP -j ACCEPT
 iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
 
 # POSTGRESQL
-which psql &>/dev/null
-if [ $? -ne 1 ]; then
+if which psql; then
   if [ -f "$_PSGFILE" ]; then
-    POSTGRESQL=$(echo "$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE)")
+    POSTGRESQL=$(grep -oP '(?<=port = )[0-9]+' "$_PSGFILE")
   else
     if [ -z "$POSTGRESQL" ]; then
       POSTGRESQL="5432"
@@ -245,8 +241,7 @@ if [ $? -ne 1 ]; then
 fi
 
 # RAGEMP
-which ragemp &>/dev/null
-if [ $? -ne 1 ]; then
+if which ragemp; then
   RAGEMP=22005,22006
   iptables -A INPUT -p tcp -m multiport --dports $RAGEMP -j ACCEPT
   iptables -A INPUT -p udp -m multiport --dports $RAGEMP -j ACCEPT
