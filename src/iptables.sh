@@ -24,10 +24,38 @@ _proc() {
   printf "\n" >&1
 }
 
+__yellow() {
+  printf '\33[1;33m%b\33[0m' "$1"
+}
+
+_warn() {
+  __purple "[$(date)] " >&1
+  __yellow "$@" >&1
+  printf "\n" >&1
+}
+
 _success() {
   __purple "[$(date)] " >&1
   __green "$@" >&1
   printf "\n" >&1
+}
+
+_exists() {
+  cmd="$1"
+  if [ -z "$cmd" ]; then
+    _warn "Usage: _exists cmd"
+    return 1
+  fi
+
+  if eval type type >/dev/null 2>&1; then
+    eval type "$cmd" >/dev/null 2>&1
+  elif command >/dev/null 2>&1; then
+    command -v "$cmd" >/dev/null 2>&1
+  else
+    which "$cmd" >/dev/null 2>&1
+  fi
+  ret="$?"
+  return $ret
 }
 
 HTTP=80,443,444,8080,8443
@@ -43,7 +71,8 @@ fi
 #########################################################################################
 ################################### REMOVE FIREWALLD ####################################
 #########################################################################################
-if which firewalld; then
+
+if _exists "firewalld"; then
   _proc "uninstalling the firewalld..."
   systemctl disable firewalld &>/dev/null
   systemctl stop firewalld
@@ -54,8 +83,7 @@ fi
 #########################################################################################
 ################################### INSTALL IPTABLES ####################################
 #########################################################################################
-
-if ! which iptables; then
+if ! _exists "iptables"; then
   _proc "installing the iptables..."
   dnf -qy install iptables-services
   systemctl enable iptables &>/dev/null
@@ -229,7 +257,7 @@ iptables -A INPUT -p tcp -m multiport --dports $HTTP -j ACCEPT
 iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
 
 # POSTGRESQL
-if which psql; then
+if _exists "psql"; then
   if [ -f "$_PSGFILE" ]; then
     POSTGRESQL=$(grep -oP '(?<=port = )[0-9]+' "$_PSGFILE")
   else
@@ -241,7 +269,7 @@ if which psql; then
 fi
 
 # RAGEMP
-if which ragemp; then
+if _exists "ragemp"; then
   RAGEMP=22005,22006
   iptables -A INPUT -p tcp -m multiport --dports $RAGEMP -j ACCEPT
   iptables -A INPUT -p udp -m multiport --dports $RAGEMP -j ACCEPT

@@ -110,6 +110,24 @@ _openPort() {
   fi
 }
 
+_exists() {
+  cmd="$1"
+  if [ -z "$cmd" ]; then
+    _warn "Usage: _exists cmd"
+    return 1
+  fi
+
+  if eval type type >/dev/null 2>&1; then
+    eval type "$cmd" >/dev/null 2>&1
+  elif command >/dev/null 2>&1; then
+    command -v "$cmd" >/dev/null 2>&1
+  else
+    which "$cmd" >/dev/null 2>&1
+  fi
+  ret="$?"
+  return $ret
+}
+
 _psg_eof() {
   cat >/var/lib/pgsql/13/data/postgresql.conf <<EOF
 $(echo "$(curl -s -L $_SRC/postgresql.conf)" |
