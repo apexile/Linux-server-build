@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #########################################################################################
 #################        Name:    LINUX SERVER BUILD SCRIPT             #################
 #################        Website: https://apexile.com                   #################
@@ -109,24 +108,6 @@ _openPort() {
       systemctl restart iptables
     fi
   fi
-}
-
-_exists() {
-  cmd="$1"
-  if [ -z "$cmd" ]; then
-    _warn "Usage: _exists cmd"
-    return 1
-  fi
-
-  if eval type type >/dev/null 2>&1; then
-    eval type "$cmd" >/dev/null 2>&1
-  elif command >/dev/null 2>&1; then
-    command -v "$cmd" >/dev/null 2>&1
-  else
-    hash "$cmd" >/dev/null 2>&1
-  fi
-  ret="$?"
-  return $ret
 }
 
 _psg_eof() {

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 #########################################################################################
 #################        Name:    FireWall Rules                        #################
@@ -75,7 +75,7 @@ fi
 
 if _exists "firewalld"; then
   _proc "uninstalling the firewalld..."
-  systemctl disable firewalld
+  systemctl disable firewalld >/dev/null 2>&1
   systemctl stop firewalld
   dnf -qy remove firewalld
   _success "firewalld successfully uninstalled!"
@@ -88,7 +88,7 @@ fi
 if ! _exists "iptables"; then
   _proc "installing the iptables..."
   dnf -qy install iptables-services
-  systemctl enable iptables
+  systemctl enable iptables >/dev/null 2>&1
   _success "iptables successfully installed!"
 fi
 
