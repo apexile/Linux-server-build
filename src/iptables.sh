@@ -8,65 +8,65 @@
 #########################################################################################
 
 __purple() {
-	printf '\33[1;35m%b\33[0m' "$1"
+  printf '\33[1;35m%b\33[0m' "$1"
 }
 
 __green() {
-	printf '\33[1;32m%b\33[0m' "$1"
+  printf '\33[1;32m%b\33[0m' "$1"
 }
 
 __cyan() {
-	printf '\33[1;36m%b\33[0m' "$1"
+  printf '\33[1;36m%b\33[0m' "$1"
 }
 
 _proc() {
-	__purple "[$(date)] " >&1
-	__cyan "$@" >&1
-	printf "\n" >&1
+  __purple "[$(date)] " >&1
+  __cyan "$@" >&1
+  printf "\n" >&1
 }
 
 __yellow() {
-	printf '\33[1;33m%b\33[0m' "$1"
+  printf '\33[1;33m%b\33[0m' "$1"
 }
 
 _warn() {
-	__purple "[$(date)] " >&1
-	__yellow "$@" >&1
-	printf "\n" >&1
+  __purple "[$(date)] " >&1
+  __yellow "$@" >&1
+  printf "\n" >&1
 }
 
 _success() {
-	__purple "[$(date)] " >&1
-	__green "$@" >&1
-	printf "\n" >&1
+  __purple "[$(date)] " >&1
+  __green "$@" >&1
+  printf "\n" >&1
 }
 
 _exists() {
-	cmd="$1"
-	if [ -z "$cmd" ]; then
-		_warn "Usage: _exists cmd"
-		return 1
-	fi
+  cmd="$1"
+  if [ -z "$cmd" ]; then
+    _warn "Usage: _exists cmd"
+    return 1
+  fi
 
-	if eval type type >/dev/null 2>&1; then
-		eval type "$cmd" >/dev/null 2>&1
-	elif command >/dev/null 2>&1; then
-		command -v "$cmd" >/dev/null 2>&1
-	else
-		hash "$cmd" >/dev/null 2>&1
-	fi
-	ret="$?"
-	return $ret
+  if eval type type >/dev/null 2>&1; then
+    eval type "$cmd" >/dev/null 2>&1
+  elif command >/dev/null 2>&1; then
+    command -v "$cmd" >/dev/null 2>&1
+  else
+    hash "$cmd" >/dev/null 2>&1
+  fi
+  ret="$?"
+  return $ret
 }
 
 HTTP=80,443,444,8080,8443
 _SSHDFILE="/etc/ssh/sshd_config"
 if [ -f "$_SSHDFILE" ]; then
-	SSH=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)
+  SSH=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)
 else
-	if [ -z "$SSH" ]; then
-		SSH="22"
-	fi
+  if [ -z "$SSH" ]; then
+    SSH="22"
+  fi
 fi
 
 #########################################################################################
@@ -74,11 +74,11 @@ fi
 #########################################################################################
 
 if _exists "firewalld"; then
-	_proc "uninstalling the firewalld..."
-	systemctl disable firewalld
-	systemctl stop firewalld
-	dnf -qy remove firewalld
-	_success "firewalld successfully uninstalled!"
+  _proc "uninstalling the firewalld..."
+  systemctl disable firewalld
+  systemctl stop firewalld
+  dnf -qy remove firewalld
+  _success "firewalld successfully uninstalled!"
 fi
 
 #########################################################################################
@@ -86,10 +86,10 @@ fi
 #########################################################################################
 
 if ! _exists "iptables"; then
-	_proc "installing the iptables..."
-	dnf -qy install iptables-services
-	systemctl enable iptables
-	_success "iptables successfully installed!"
+  _proc "installing the iptables..."
+  dnf -qy install iptables-services
+  systemctl enable iptables
+  _success "iptables successfully installed!"
 fi
 
 #########################################################################################
@@ -97,9 +97,9 @@ fi
 #########################################################################################
 
 if [ -e /proc/sys/net/ipv4/conf/all/rp_filter ]; then
-	for filter in /proc/sys/net/ipv4/conf/*/rp_filter; do
-		echo 1 >"$filter"
-	done
+  for filter in /proc/sys/net/ipv4/conf/*/rp_filter; do
+    echo 1 >"$filter"
+  done
 fi
 
 #########################################################################################
@@ -163,13 +163,13 @@ iptables -A INPUT -f -j DROP
 
 iptables -N PING_OF_DEATH # make a chain with the name "PING_OF_DEATH"
 iptables -A PING_OF_DEATH -p icmp --icmp-type echo-request \
-	-m hashlimit \
-	--hashlimit 1/s \
-	--hashlimit-burst 10 \
-	--hashlimit-htable-expire 300000 \
-	--hashlimit-mode srcip \
-	--hashlimit-name t_PING_OF_DEATH \
-	-j RETURN
+  -m hashlimit \
+  --hashlimit 1/s \
+  --hashlimit-burst 10 \
+  --hashlimit-htable-expire 300000 \
+  --hashlimit-mode srcip \
+  --hashlimit-name t_PING_OF_DEATH \
+  -j RETURN
 
 # discard ICMP that exceeds the limit
 iptables -A PING_OF_DEATH -j LOG --log-prefix "ping_of_death_attack: "
@@ -184,13 +184,13 @@ iptables -A INPUT -p icmp --icmp-type echo-request -j PING_OF_DEATH
 
 iptables -N SYN_FLOOD # make a chain with the name "SYN_FLOOD"
 iptables -A SYN_FLOOD -p tcp --syn \
-	-m hashlimit \
-	--hashlimit 200/s \
-	--hashlimit-burst 3 \
-	--hashlimit-htable-expire 300000 \
-	--hashlimit-mode srcip \
-	--hashlimit-name t_SYN_FLOOD \
-	-j RETURN
+  -m hashlimit \
+  --hashlimit 200/s \
+  --hashlimit-burst 3 \
+  --hashlimit-htable-expire 300000 \
+  --hashlimit-mode srcip \
+  --hashlimit-name t_SYN_FLOOD \
+  -j RETURN
 
 # discard SYN packets that exceed the limit
 iptables -A SYN_FLOOD -j LOG --log-prefix "syn_flood_attack: "
@@ -205,13 +205,13 @@ iptables -A INPUT -p tcp --syn -j SYN_FLOOD
 
 iptables -N HTTP_DOS # make a chain with the name "HTTP_DOS"
 iptables -A HTTP_DOS -p tcp -m multiport --dports $HTTP \
-	-m hashlimit \
-	--hashlimit 1/s \
-	--hashlimit-burst 100 \
-	--hashlimit-htable-expire 300000 \
-	--hashlimit-mode srcip \
-	--hashlimit-name t_HTTP_DOS \
-	-j RETURN
+  -m hashlimit \
+  --hashlimit 1/s \
+  --hashlimit-burst 100 \
+  --hashlimit-htable-expire 300000 \
+  --hashlimit-mode srcip \
+  --hashlimit-name t_HTTP_DOS \
+  -j RETURN
 
 # discard connections that exceed the limit
 iptables -A HTTP_DOS -j LOG --log-prefix "http_dos_attack: "
@@ -260,21 +260,21 @@ iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
 
 # POSTGRESQL
 if _exists "psql"; then
-	if [ -f "$_PSGFILE" ]; then
-		POSTGRESQL=$(grep -oP '(?<=port = )[0-9]+' "$_PSGFILE")
-	else
-		if [ -z "$POSTGRESQL" ]; then
-			POSTGRESQL="5432"
-		fi
-	fi
-	iptables -A INPUT -p tcp -m multiport --dports $POSTGRESQL -j ACCEPT
+  if [ -f "$_PSGFILE" ]; then
+    POSTGRESQL=$(grep -oP '(?<=port = )[0-9]+' "$_PSGFILE")
+  else
+    if [ -z "$POSTGRESQL" ]; then
+      POSTGRESQL="5432"
+    fi
+  fi
+  iptables -A INPUT -p tcp -m multiport --dports $POSTGRESQL -j ACCEPT
 fi
 
 # RAGEMP
 if _exists "ragemp"; then
-	RAGEMP=22005,22006
-	iptables -A INPUT -p tcp -m multiport --dports $RAGEMP -j ACCEPT
-	iptables -A INPUT -p udp -m multiport --dports $RAGEMP -j ACCEPT
+  RAGEMP=22005,22006
+  iptables -A INPUT -p tcp -m multiport --dports $RAGEMP -j ACCEPT
+  iptables -A INPUT -p udp -m multiport --dports $RAGEMP -j ACCEPT
 fi
 
 #########################################################################################
