@@ -287,5 +287,3 @@ iptables -A INPUT -j DROP
 /sbin/iptables-save >/etc/sysconfig/iptables
 
 systemctl start iptables
-
-exit $?
