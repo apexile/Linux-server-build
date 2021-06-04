@@ -200,27 +200,6 @@ iptables -A SYN_FLOOD -j DROP
 iptables -A INPUT -p tcp --syn -j SYN_FLOOD
 
 #########################################################################################
-########################### Anti-Attack: HTTP DoS/DDoS Attack ###########################
-#########################################################################################
-
-iptables -N HTTP_DOS # make a chain with the name "HTTP_DOS"
-iptables -A HTTP_DOS -p tcp -m multiport --dports $HTTP \
--m hashlimit \
---hashlimit 1/s \
---hashlimit-burst 100 \
---hashlimit-htable-expire 300000 \
---hashlimit-mode srcip \
---hashlimit-name t_HTTP_DOS \
--j RETURN
-
-# discard connections that exceed the limit
-iptables -A HTTP_DOS -j LOG --log-prefix "http_dos_attack: "
-iptables -A HTTP_DOS -j DROP
-
-# packets to HTTP jump to the "HTTP_DOS" chain
-iptables -A INPUT -p tcp -m multiport --dports $HTTP -j HTTP_DOS
-
-#########################################################################################
 ############################# Anti-Attack: IDENT port probe #############################
 #########################################################################################
 
