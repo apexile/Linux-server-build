@@ -6,6 +6,7 @@
   <p>
     
   ![GitHub](https://img.shields.io/github/license/zZerooneXx/Linux-server-build?color=008FFF)
+  ![Shellcheck](https://github.com/zZerooneXx/Linux-server-build/workflows/Shellcheck/badge.svg)
   
   </p>
 </div>
