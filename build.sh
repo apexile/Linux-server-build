@@ -122,7 +122,7 @@ _exists() {
   elif command >/dev/null 2>&1; then
     command -v "$cmd" >/dev/null 2>&1
   else
-    which "$cmd" >/dev/null 2>&1
+    hash "$cmd" >/dev/null 2>&1
   fi
   ret="$?"
   return $ret
