@@ -59,7 +59,12 @@ _exists() {
   return $ret
 }
 
-HTTP=80,443,444,8080,8443
+if _exists "nginx" || _exists "apache"; then
+  HTTP=80,443
+else
+  HTTP=8080
+fi
+
 _SSHDFILE="/etc/ssh/sshd_config"
 if [ -f "$_SSHDFILE" ]; then
   SSH=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)
