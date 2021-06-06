@@ -234,9 +234,9 @@ iptables -A INPUT -p tcp -m multiport --dports 113 -j REJECT --reject-with tcp-r
 ############################# Anti-Attack: SSH Brute Force ##############################
 #########################################################################################
 
-iptables -A INPUT -p tcp --syn -m multiport --dports $SSH -m recent --name ssh_attack --set
-iptables -A INPUT -p tcp --syn -m multiport --dports $SSH -m recent --name ssh_attack --rcheck --seconds 180 --hitcount 8 -j LOG --log-prefix "ssh_brute_force: "
-iptables -A INPUT -p tcp --syn -m multiport --dports $SSH -m recent --name ssh_attack --rcheck --seconds 180 --hitcount 8 -j REJECT --reject-with tcp-reset
+iptables -A INPUT -p tcp --syn -m multiport --dports $_SSHPORT -m recent --name ssh_attack --set
+iptables -A INPUT -p tcp --syn -m multiport --dports $_SSHPORT -m recent --name ssh_attack --rcheck --seconds 180 --hitcount 8 -j LOG --log-prefix "ssh_brute_force: "
+iptables -A INPUT -p tcp --syn -m multiport --dports $_SSHPORT -m recent --name ssh_attack --rcheck --seconds 180 --hitcount 8 -j REJECT --reject-with tcp-reset
 
 #########################################################################################
 ## Packets destined for all hosts (broadcast address, multicast address) are discarded ##
@@ -260,7 +260,7 @@ iptables -A INPUT -p icmp -j ACCEPT
 iptables -A INPUT -p tcp -m multiport --dports $HTTP -j ACCEPT
 
 # SSH
-iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
+iptables -A INPUT -p tcp -m multiport --dports $_SSHPORT -j ACCEPT
 
 # POSTGRESQL
 if _exists "psql"; then
@@ -270,9 +270,8 @@ if _exists "psql"; then
     grep -oqP '(?<=max_connections = )[0-9]+' $_PSGFILE && _PGCONN=$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE) || _PGCONN="20"
   else
     _PGPORT="5432"
-    _PGCONN="20"
   fi
-  iptables -A INPUT -p tcp -m multiport --dports $POSTGRESQL -j ACCEPT
+  iptables -A INPUT -p tcp -m multiport --dports $_PGPORT -j ACCEPT
 fi
 
 # RAGEMP
