@@ -267,7 +267,6 @@ if _exists "psql"; then
   _PSGFILE="/var/lib/pgsql/13/data/postgresql.conf"
   if [ -f "$_PSGFILE" ]; then
     grep -oqP '(?<=port = )[0-9]+' $_PSGFILE && _PGPORT=$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE) || _PGPORT="5432"
-    grep -oqP '(?<=max_connections = )[0-9]+' $_PSGFILE && _PGCONN=$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE) || _PGCONN="20"
   else
     _PGPORT="5432"
   fi
