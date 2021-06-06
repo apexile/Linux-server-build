@@ -6,12 +6,7 @@
 #################        GitHub:  https://github.com/zZerooneXx         #################
 #########################################################################################
 
-_SRC="https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src"
-
-which bc &>/dev/null
-if [ $? -ne 0 ]; then
-  dnf -qy install bc
-fi
+_SRC="https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/"
 
 _startswith() {
   _str="$1"
@@ -52,21 +47,21 @@ __cyan() {
 }
 
 _proc() {
-  __purple "[$(date)] " >&1
-  __cyan "$@" >&1
-  printf "\n" >&1
+  __purple "[$(date)] "
+  __cyan "$@"
+  printf "\n"
 }
 
 _success() {
-  __purple "[$(date)] " >&1
-  __green "$@" >&1
-  printf "\n" >&1
+  __purple "[$(date)] "
+  __green "$@"
+  printf "\n"
 }
 
 _warn() {
-  __purple "[$(date)] " >&1
-  __yellow "$@" >&1
-  printf "\n" >&1
+  __purple "[$(date)] "
+  __yellow "$@"
+  printf "\n"
 }
 
 _err() {
@@ -95,19 +90,35 @@ _checkSudo() {
 }
 
 _openPort() {
-  which firewalld &>/dev/null
-  if [ $? -ne 1 ]; then
+  if _exists "firewalld"; then
     for i in ${1//,/ }; do
-      firewall-cmd --zone=public --permanent --add-port=${i}/tcp &>/dev/null
+      firewall-cmd --zone=public --permanent --add-port=${i}/tcp >/dev/null 2>&1
     done
     systemctl restart firewalld
   else
-    which iptables &>/dev/null
-    if [ $? -ne 1 ]; then
+    if _exists "iptables"; then
       iptables -A INPUT -p tcp -m multiport --dports $1 -j ACCEPT
       systemctl restart iptables
     fi
   fi
+}
+
+_exists() {
+  cmd="$1"
+  if [ -z "$cmd" ]; then
+    _warn "Usage: _exists cmd"
+    return 1
+  fi
+
+  if eval type type >/dev/null 2>&1; then
+    eval type "$cmd" >/dev/null 2>&1
+  elif command >/dev/null 2>&1; then
+    command -v "$cmd" >/dev/null 2>&1
+  else
+    hash "$cmd" >/dev/null 2>&1
+  fi
+  ret="$?"
+  return $ret
 }
 
 _psg_eof() {
@@ -143,8 +154,10 @@ EOF
 }
 
 _sys_eof() {
-  cat >/etc/sysctl.conf <<EOF
-$(echo "$(curl -s -L $_SRC/sysctl.conf)" |
+  _SYSCTL=$(curl -s -L $_SRC/sysctl.conf)
+  ip a | grep -Eq "inet6" || _SYSCTL=$(echo "$_SYSCTL" | sed '/net.ipv6/d')
+  cat >/srv/sysctl.conf <<EOF
+$(echo "$_SYSCTL" |
     sed "s/#max_orphan/$(echo "$_MEM_BYTES * 0.10 / 65536" | bc | cut -f 1 -d '.')/g" |
     sed "s/#file_max/$(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.')/g" |
     sed "s/#min_free/$(echo "($_MEM_BYTES / 1024) * 0.01" | bc | cut -f 1 -d '.')/g" |
@@ -163,9 +176,22 @@ EOF
 }
 
 _nginx_eof() {
-  cat >/etc/nginx/nginx.conf <<EOF
-$(echo "$(curl -s -L $_SRC/nginx.conf)" |
-    sed "s/domain.tld/$_DOMAIN/g")
+  NGINX=$(curl -s -L $_SRC/nginx.conf)
+  if [ ! -z "${arg[0]}" ]; then
+    _domains=$(for d in ${arg[0]//::/ }; do
+      printf "$d *.$d "
+    done)
+    NGINX=$(echo "$NGINX" | sed "s/domain.tld \*\.domain.tld/$(echo "$_domains" | sed 's/.$//')/g")
+  fi
+
+  echo "${arg[1]}" | grep -Eq "ssl" && NGINX=$(echo "$NGINX" | sed '/# DEFAULT/,/# SSL/d') || NGINX=$(echo "$NGINX" | sed '/# SSL/,$d')
+  echo "${arg[2]}" | grep -Eq "www" && NGINX=$(echo "$NGINX" | sed '/($host/I,+2 d')
+
+  ip a | grep -Eq "inet " || NGINX=$(echo "$NGINX" | sed '/listen [0-9]/d')
+  ip a | grep -Eq "inet6" || NGINX=$(echo "$NGINX" | sed '/listen \[::]/d')
+
+  cat >/srv/nginx.conf <<EOF
+$(echo "$NGINX")
 EOF
 }
 
@@ -186,15 +212,14 @@ _ssh() {
   else
     _SSHDFILE="/etc/ssh/sshd_config"
     if [ -f "$_SSHDFILE" ]; then
-      _SSHPORT=$(echo "$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)")
+      grep -oqP '(?<=Port )[0-9]+' $_SSHDFILE && _SSHPORT=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE) || _SSHPORT="22"
+    else
+      _SSHPORT="22"
     fi
     if [ -z "${arg[0]//[0-9]/}" ] && [ -n "${arg[0]}" ]; then
       _SSHPORT="${arg[0]}"
-      _openPort "$_SSHPORT"
     fi
-    if [ -z "$_SSHPORT" ]; then
-      _SSHPORT="22"
-    fi
+    _openPort "$_SSHPORT"
     _proc "installing the sshd_config..."
     _ssh_eof
     systemctl restart sshd
@@ -204,20 +229,19 @@ _ssh() {
 
 _psg() {
   if [ "${_CMD}" = "pkg" ]; then
-    which psql &>/dev/null
-    if [ $? -ne 0 ]; then
+    if ! _exists "psql"; then
       _proc "installing the PostgreSQL..."
       dnf -qy module disable postgresql
       dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm
-      dnf -qy install postgresql13-server &>/dev/null
-      /usr/pgsql-13/bin/postgresql-13-setup initdb &>/dev/null
-      systemctl enable postgresql-13 &>/dev/null
+      dnf -qy install postgresql13-server >/dev/null 2>&1
+      /usr/pgsql-13/bin/postgresql-13-setup initdb >/dev/null 2>&1
+      systemctl enable postgresql-13 >/dev/null 2>&1
       systemctl start postgresql-13
       if [ "${arg[0]}" ] && [ "${arg[1]}" ]; then
         _PGDB="${arg[0]}"
         _PGPASS="${arg[1]}"
-        echo "$_PGPASS" | passwd "postgres" --stdin &>/dev/null
-        _pgdb_eof &>/dev/null
+        echo "$_PGPASS" | passwd "postgres" --stdin >/dev/null 2>&1
+        _pgdb_eof >/dev/null 2>&1
       fi
       systemctl restart postgresql-13
       _success "PostgreSQL successfully installed!"
@@ -227,33 +251,27 @@ _psg() {
   fi
 
   if [ "${_CMD}" = "cfg" ]; then
-    which psql &>/dev/null
-    if [ $? -ne 1 ]; then
+    if _exists "psql"; then
       _PSGFILE="/var/lib/pgsql/13/data/postgresql.conf"
       if [ -f "$_PSGFILE" ]; then
-        _PGPORT=$(echo "$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE)")
-        _PGCONN=$(echo "$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE)")
+        grep -oqP '(?<=port = )[0-9]+' $_PSGFILE && _PGPORT=$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE) || _PGPORT="5432"
+        grep -oqP '(?<=max_connections = )[0-9]+' $_PSGFILE && _PGCONN=$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE) || _PGCONN="20"
+      else
+        _PGPORT="5432"
+        _PGCONN="20"
       fi
       if [ -z "${arg[0]//[0-9]/}" ] && [ -n "${arg[0]}" ]; then
         _PGPORT="${arg[0]}"
-        _openPort "$_PGPORT"
       fi
+      _openPort "$_PGPORT"
       if [ -z "${arg[1]//[0-9]/}" ] && [ -n "${arg[1]}" ]; then
         _PGCONN="${arg[1]}"
       fi
-      if [ -z "$_PGPORT" ]; then
-        _PGPORT="5432"
-        _openPort "$_PGPORT"
-      fi
-      if [ -z "$_PGCONN" ] || (($_PGCONN < "20")); then
-        _PGCONN="20"
-      fi
       if (($_AVG_NUMCORE > "4")); then
         _AVG_NUMCORE="4"
-      else
-        if (($_AVG_NUMCORE < "1")); then
-          _AVG_NUMCORE="1"
-        fi
+      fi
+      if (($_AVG_NUMCORE < "1")); then
+        _AVG_NUMCORE="1"
       fi
       _proc "installing the pg_hba.conf..."
       _pg_hba_eof
@@ -270,8 +288,7 @@ _psg() {
 
 _nginx() {
   if [ "${_CMD}" = "pkg" ]; then
-    which nginx &>/dev/null
-    if [ $? -ne 0 ]; then
+    if ! _exists "nginx"; then
       _proc "installing NGINX..."
       dnf -qy module disable php
       dnf -qy module disable nginx
@@ -279,8 +296,7 @@ _nginx() {
       dnf -qy install nginx
       systemctl enable nginx
       systemctl start nginx
-      HTTP="80,443"
-      _openPort "$HTTP"
+      grep -Eq "ssl" ${arg[0]} && _openPort "80,443" || _openPort "80"
       _success "NGINX successfully installed!"
     else
       _warn "NGINX is already installed!"
@@ -288,13 +304,7 @@ _nginx() {
   fi
 
   if [ "${_CMD}" = "cfg" ]; then
-    which nginx &>/dev/null
-    if [ $? -ne 1 ]; then
-      if [ "${arg[0]}" ]; then
-        _DOMAIN="${arg[0]}"
-      else
-        _DOMAIN="domain.tld"
-      fi
+    if _exists "nginx"; then
       _proc "installing the nginx.conf..."
       _nginx_eof
       systemctl restart nginx
@@ -313,13 +323,22 @@ _ipt() {
   _success "iptables rules successfully installed!"
 }
 
-_rmipv6() {
-  _proc "Removing the IPv6 interface..."
-  _GRUBFILE=/etc/default/grub
-  grep -Eq "ipv6.disable" $_GRUBFILE || sed -i 's/^GRUB_CMDLINE_LINUX="/&ipv6.disable=1 /' $_GRUBFILE
-  grep -Eq "ipv6.disable=0" $_GRUBFILE | sed -i 's/ipv6.disable=0/ipv6.disable=1/' $_GRUBFILE
-  grub2-mkconfig -o /boot/grub2/grub.cfg &>/dev/null
-  _success "IPv6 interface successfully Removed!"
+_rmipv() {
+  if [ -z "$1" ]; then
+    _warn "Usage: build.sh --rmipv -n 4 or -n 6"
+    return 1
+  fi
+
+  if [ "$1" = "4" ] || [ "$1" = "6" ]; then
+    _proc "Removing the IPv$1 interface..."
+    _GRUBFILE=/etc/default/grub
+    grep -Eq "ipv$1.disable" $_GRUBFILE || sed -i 's/^GRUB_CMDLINE_LINUX="/&ipv'"$1"'.disable=1 /' $_GRUBFILE
+    grep -Eq "ipv$1.disable=0" $_GRUBFILE | sed -i 's/ipv'"$1"'.disable=0/ipv'"$1"'.disable=1/' $_GRUBFILE
+    grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1
+    _success "IPv$1 interface successfully Removed!"
+  else
+    _err "no such IPv$1 interface exists"
+  fi
 }
 
 install() {
@@ -330,10 +349,7 @@ install() {
 
   for i in ${1//,/ }; do
     _params=$(echo "$i" | \grep -Po '(?<=\[).*(?=\])')
-    arg=(${_params//\// })
-    for j in "${!arg[@]}"; do
-      :
-    done
+    IFS='/' read -r -a arg <<<"$_params"
     _i=$(echo "_$i" | sed 's/\[.*]//')
     $_i 2>/dev/null || _err "Unknown : ${_i:1}"
   done
@@ -345,14 +361,18 @@ Commands:
   -h, --help                        Show this help message.
   --pkg                             Install Packages from Repositories.
   --cfg                             Install Сonfiguration Settings.
-  --rm-ipv6                         Remove IPv6 from interface.
   --ipt                             Install iptables rules.
+  --rmipv                           Remove IPv6 or IPv4 from interface.
 Parameters:
   -i <...[.../]>                    Which package / configuration to install and, 
                                     if necessary, set the parameters in [.../]
                                     See: $_SRC" >&2
   printf "\n" >&2
 }
+
+if ! _exists "bc"; then
+  dnf -qy install bc
+fi
 
 _process() {
   _CMD=""
@@ -380,9 +400,8 @@ _process() {
     --cfg)
       _CMD="cfg"
       ;;
-    --rm-ipv6)
-      _rmipv6
-      return
+    --rmipv)
+      _CMD="rmipv"
       ;;
     --ipt)
       _ipt
@@ -399,6 +418,19 @@ _process() {
           _i="$_ivalue"
         else
           _i="$_i,$_ivalue"
+        fi
+      fi
+      shift
+      ;;
+    -n)
+      _nvalue="$2"
+      if [ -z "${_nvalue//[0-9]/}" ] && [ -n "$_nvalue" ]; then
+        if _startswith "$_nvalue" "-"; then
+          _err "'$_nvalue' is not a valid ${_CMD} for parameter '$1'"
+          return 1
+        fi
+        if [ -z "$_n" ]; then
+          _n="$_nvalue"
         fi
       fi
       shift
@@ -421,6 +453,7 @@ _process() {
   case "${_CMD}" in
   pkg) install "$_i" ;;
   cfg) install "$_i" ;;
+  rmipv) _rmipv "$_n" ;;
   *)
     if [ "$_CMD" ]; then
       _err "Invalid command: $_CMD"

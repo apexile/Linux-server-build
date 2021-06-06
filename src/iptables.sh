@@ -20,9 +20,9 @@ __cyan() {
 }
 
 _proc() {
-  __purple "[$(date)] " >&1
-  __cyan "$@" >&1
-  printf "\n" >&1
+  __purple "[$(date)] "
+  __cyan "$@"
+  printf "\n"
 }
 
 __yellow() {
@@ -30,15 +30,15 @@ __yellow() {
 }
 
 _warn() {
-  __purple "[$(date)] " >&1
-  __yellow "$@" >&1
-  printf "\n" >&1
+  __purple "[$(date)] "
+  __yellow "$@"
+  printf "\n"
 }
 
 _success() {
-  __purple "[$(date)] " >&1
-  __green "$@" >&1
-  printf "\n" >&1
+  __purple "[$(date)] "
+  __green "$@"
+  printf "\n"
 }
 
 _exists() {
@@ -67,11 +67,9 @@ fi
 
 _SSHDFILE="/etc/ssh/sshd_config"
 if [ -f "$_SSHDFILE" ]; then
-  SSH=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE)
+  grep -oqP '(?<=Port )[0-9]+' $_SSHDFILE && _SSHPORT=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE) || _SSHPORT="22"
 else
-  if [ -z "$SSH" ]; then
-    SSH="22"
-  fi
+  _SSHPORT="22"
 fi
 
 #########################################################################################
@@ -80,8 +78,8 @@ fi
 
 if _exists "firewalld"; then
   _proc "uninstalling the firewalld..."
-  systemctl disable firewalld >/dev/null 2>&1
   systemctl stop firewalld
+  systemctl disable firewalld >/dev/null 2>&1
   dnf -qy remove firewalld
   _success "firewalld successfully uninstalled!"
 fi
@@ -93,7 +91,8 @@ fi
 if ! _exists "iptables"; then
   _proc "installing the iptables..."
   dnf -qy install iptables-services
-  systemctl enable iptables >/dev/null 2>&1
+  ip a | grep -Eq "inet " && systemctl enable iptables >/dev/null 2>&1
+  ip a | grep -Eq "inet6" && systemctl enable ip6tables >/dev/null 2>&1
   _success "iptables successfully installed!"
 fi
 
@@ -265,12 +264,13 @@ iptables -A INPUT -p tcp -m multiport --dports $SSH -j ACCEPT
 
 # POSTGRESQL
 if _exists "psql"; then
+  _PSGFILE="/var/lib/pgsql/13/data/postgresql.conf"
   if [ -f "$_PSGFILE" ]; then
-    POSTGRESQL=$(grep -oP '(?<=port = )[0-9]+' "$_PSGFILE")
+    grep -oqP '(?<=port = )[0-9]+' $_PSGFILE && _PGPORT=$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE) || _PGPORT="5432"
+    grep -oqP '(?<=max_connections = )[0-9]+' $_PSGFILE && _PGCONN=$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE) || _PGCONN="20"
   else
-    if [ -z "$POSTGRESQL" ]; then
-      POSTGRESQL="5432"
-    fi
+    _PGPORT="5432"
+    _PGCONN="20"
   fi
   iptables -A INPUT -p tcp -m multiport --dports $POSTGRESQL -j ACCEPT
 fi
@@ -289,6 +289,5 @@ fi
 iptables -A INPUT -j LOG --log-prefix "drop: "
 iptables -A INPUT -j DROP
 
-/sbin/iptables-save >/etc/sysconfig/iptables
-
-systemctl start iptables
+ip a | grep -Eq "inet " && /sbin/iptables-save >/etc/sysconfig/iptables
+ip a | grep -Eq "inet6" && /sbin/ip6tables-save >/etc/sysconfig/ip6tables
