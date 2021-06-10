@@ -15,4 +15,7 @@
 
 * Bash, dash and sh compatible.
 * Purely written in Shell
-* Only IPv4 support
+* IPv6 support
+* Simple, powerful and very easy to use.
+* Supports systems of any configuration
+* Support only for CentOS/RHEL 8 version

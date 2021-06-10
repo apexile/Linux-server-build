@@ -1,473 +1,520 @@
-#!/bin/bash
-#########################################################################################
-#################        Name:    LINUX SERVER BUILD SCRIPT             #################
-#################        Website: https://apexile.com                   #################
-#################        Author:  ZerooneX <zZerooneXx@gmail.com>       #################
-#################        GitHub:  https://github.com/zZerooneXx         #################
-#########################################################################################
+#!/bin/sh
 
-_SRC="https://raw.githubusercontent.com/zZerooneXx/Linux-server-build/main/src/"
+VER=alpha
+HOST="raw.githubusercontent.com"
+AUTHOR="zZerooneXx"
+PROJECT_NAME="Linux-server-build"
+_SRC="https://$HOST/$AUTHOR/$PROJECT_NAME/main/src/"
+
+RED=$(printf '\e[31m')
+GREEN=$(printf '\e[32m')
+YELLOW=$(printf '\e[33m')
+PURPLE=$(printf '\e[35m')
+PLAIN=$(printf '\e[0m')
 
 _startswith() {
-  _str="$1"
-  _sub="$2"
-  echo "$_str" | grep "^$_sub" >/dev/null 2>&1
-}
-
-_endswith() {
-  _str="$1"
-  _sub="$2"
-  echo "$_str" | grep -- "$_sub\$" >/dev/null 2>&1
-}
-
-_contains() {
-  _str="$1"
-  _sub="$2"
-  echo "$_str" | grep -- "$_sub" >/dev/null 2>&1
-}
-
-__red() {
-  printf '\33[1;31m%b\33[0m' "$1"
-}
-
-__green() {
-  printf '\33[1;32m%b\33[0m' "$1"
-}
-
-__yellow() {
-  printf '\33[1;33m%b\33[0m' "$1"
-}
-
-__purple() {
-  printf '\33[1;35m%b\33[0m' "$1"
-}
-
-__cyan() {
-  printf '\33[1;36m%b\33[0m' "$1"
-}
-
-_proc() {
-  __purple "[$(date)] "
-  __cyan "$@"
-  printf "\n"
+  echo "$1" | grep "^$2" >/dev/null 2>&1
 }
 
 _success() {
-  __purple "[$(date)] "
-  __green "$@"
-  printf "\n"
+  cat >&2 <<-EOF
+	${PURPLE}[$(date)] ${GREEN}$1${PLAIN}
+	EOF
 }
 
-_warn() {
-  __purple "[$(date)] "
-  __yellow "$@"
-  printf "\n"
+_info() {
+  cat >&2 <<-EOF
+	${PURPLE}[$(date)] ${YELLOW}$1${PLAIN}
+	EOF
 }
 
 _err() {
-  __purple "[$(date)] " >&2
-  if [ -z "$2" ]; then
-    __red "$1" >&2
-  else
-    __red "$1='$2'" >&2
-  fi
-  printf "\n" >&2
-  return 1
+  cat >&2 <<-EOF
+	${PURPLE}[$(date)] ${RED}$1${PLAIN}
+	EOF
 }
 
-_checkSudo() {
-  if [ "$SUDO_GID" ] && [ "$SUDO_COMMAND" ] && [ "$SUDO_USER" ] && [ "$SUDO_UID" ]; then
-    if [ "$SUDO_USER" = "root" ] && [ "$SUDO_UID" = "0" ]; then
-      return 0
-    fi
-    if [ -n "$SUDO_COMMAND" ]; then
-      _endswith "$SUDO_COMMAND" /bin/su || _contains "$SUDO_COMMAND" "/bin/su " || grep "^$SUDO_COMMAND\$" /etc/shells >/dev/null 2>&1
-      return $?
-    fi
-    return 1
+_err_arg() {
+  cat >&2 <<-EOF
+	${PURPLE}[$(date)] ${RED}$1 ${YELLOW}${2}${PLAIN}
+	EOF
+}
+
+_check_root() {
+  local user=""
+  user="$(id -un 2>/dev/null || true)"
+  if [ "$user" != "root" ]; then
+    _err "Permission error, please use root user to run this script"
+    exit 1
   fi
-  return 0
+}
+
+_exists() {
+  if eval type type >/dev/null 2>&1; then
+    eval type "$@" >/dev/null 2>&1
+  elif command >/dev/null 2>&1; then
+    command -v "$@" >/dev/null 2>&1
+  else
+    hash "$@" >/dev/null 2>&1
+  fi
+}
+
+is_number() {
+  expr "$1" + 1 >/dev/null 2>&1
+}
+
+_host() {
+  local server_ip=""
+  local interface_info=""
+
+  if _exists ip; then
+    interface_info="$(ip addr)"
+  elif _exists ifconfig; then
+    interface_info="$(ifconfig)"
+  fi
+
+  server_ip=$(echo "$interface_info" |
+    grep -oE "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" |
+    grep -vE "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." |
+    head -n 1)
+
+  if [ -z "$server_ip" ]; then
+    server_ip="$(wget -qO- --no-check-certificate https://ipv4.icanhazip.com)"
+  fi
+
+  echo "$server_ip"
+}
+
+_os() {
+  [ -r /etc/os-release ] && lsb_dist="$(. /etc/os-release && echo "$ID")"
+  [ -r /etc/os-release ] && dist_version="$(. /etc/os-release && echo "$VERSION_ID")"
+
+  if [ "$lsb_dist" = "centos" ] || [ "$lsb_dist" = "redhat" ]; then
+    if [ "$dist_version" != "8" ]; then
+      _err "This script can not be run in your system now!"
+      exit 1
+    fi
+  fi
+}
+
+_arch() {
+  arch="$(uname -m)"
+  if [ "$arch" = "amd64" ] || [ "$arch" = "x86_64" ]; then
+    arch='x86_64'
+  else
+    _err "The current script only supports x86_64 systems. Your system is: $arch"
+    exit 1
+  fi
+}
+
+_preinstall() {
+  if ! _exists "dnf"; then
+    _err "DNF package manager must be installed!"
+    exit 1
+  fi
+
+  if ! _exists "bc"; then
+    dnf -qy install bc >/dev/null 2>&1 || {
+      _err "The operating system needs to be updated!"
+      exit 1
+    }
+  fi
 }
 
 _openPort() {
   if _exists "firewalld"; then
     for i in ${1//,/ }; do
-      firewall-cmd --zone=public --permanent --add-port=${i}/tcp >/dev/null 2>&1
+      firewall-cmd --zone=public --permanent --add-port="$i"/tcp >/dev/null 2>&1
     done
     systemctl restart firewalld
-  else
-    if _exists "iptables"; then
-      iptables -A INPUT -p tcp -m multiport --dports $1 -j ACCEPT
-      systemctl restart iptables
-    fi
+  elif _exists "iptables"; then
+    iptables -A INPUT -p tcp -m multiport --dports "$1" -j ACCEPT
+    systemctl restart iptables
   fi
-}
-
-_exists() {
-  cmd="$1"
-  if [ -z "$cmd" ]; then
-    _warn "Usage: _exists cmd"
-    return 1
-  fi
-
-  if eval type type >/dev/null 2>&1; then
-    eval type "$cmd" >/dev/null 2>&1
-  elif command >/dev/null 2>&1; then
-    command -v "$cmd" >/dev/null 2>&1
-  else
-    hash "$cmd" >/dev/null 2>&1
-  fi
-  ret="$?"
-  return $ret
 }
 
 _psg_eof() {
-  cat >/var/lib/pgsql/13/data/postgresql.conf <<EOF
-$(echo "$(curl -s -L $_SRC/postgresql.conf)" |
-    sed "s/'\*'/'$_HOST'/g" |
-    sed "s/port = 5432/port = $_PGPORT/g" |
+  local _PSG=$(curl -s -L $_SRC/postgresql.conf)
+  cat >/var/lib/pgsql/13/data/postgresql.conf <<-EOF
+		$(echo "$_PSG" |
+    sed "s/'\*'/'$(_host)'/g" |
+    sed "s/port = 5432/port = $_port/g" |
     sed "s~#timezone~$_TIMEZONE~g" |
-    sed "s/max_connections = 20/max_connections = $_PGCONN/g" |
+    sed "s/max_connections = 20/max_connections = $_clients/g" |
     sed "s/#shared_buffers/$(echo "$_MEM_MB * 0.25" | bc | cut -f 1 -d '.')MB/g" |
     sed "s/#effective_cache_size/$(echo "$_MEM_MB * 0.75" | bc | cut -f 1 -d '.')MB/g" |
     sed "s/#maintenance_work_mem/$(echo "$_MEM_MB * 0.05" | bc | cut -f 1 -d '.')MB/g" |
-    sed "s/#work_mem/$(echo "($_MEM_MB / $_PGCONN) * 0.25" | bc | cut -f 1 -d '.')MB/g" |
-    sed "s/#temp_buffers/$(echo "($_MEM_MB / $_PGCONN) * 0.4" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#work_mem/$(echo "($_MEM_MB / $_clients) * 0.25" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#temp_buffers/$(echo "($_MEM_MB / $_clients) * 0.4" | bc | cut -f 1 -d '.')MB/g" |
     sed "s/#numcore/$(echo "$_NUMCORE")/g" |
     sed "s/#avgnumcore/$(echo "$_AVG_NUMCORE" | bc | cut -f 1 -d '.')/g" |
     sed "s/#max_stack_depth/$(echo "$_STACKSIZE * 0.80" | bc | cut -f 1 -d '.')MB/g")
-EOF
+	EOF
 }
 
 _pg_hba_eof() {
-  cat >/var/lib/pgsql/13/data/pg_hba.conf <<EOF
-$(echo "$(curl -s -L $_SRC/pg_hba.conf)")
-EOF
+  local _PG_HBA=$(curl -s -L $_SRC/pg_hba.conf)
+  cat >/var/lib/pgsql/13/data/pg_hba.conf <<-EOF
+		$(echo "$_PG_HBA")
+	EOF
 }
 
 _pgdb_eof() {
-  su postgres <<EOF
-psql -c "CREATE DATABASE $_PGDB"
-psql -c "ALTER USER postgres WITH PASSWORD '$_PGPASS';"
-psql -c "GRANT ALL privileges ON DATABASE $_PGDB TO postgres;"
-EOF
+  su postgres <<-EOF
+		psql -c "CREATE DATABASE $_db"
+		psql -c "ALTER USER postgres WITH PASSWORD '$_pass';"
+		psql -c "GRANT ALL privileges ON DATABASE $_db TO postgres;"
+	EOF
 }
 
 _sys_eof() {
-  _SYSCTL=$(curl -s -L $_SRC/sysctl.conf)
+  local _SYSCTL=$(curl -s -L $_SRC/sysctl.conf)
   ip a | grep -Eq "inet6" || _SYSCTL=$(echo "$_SYSCTL" | sed '/net.ipv6/d')
-  cat >/srv/sysctl.conf <<EOF
-$(echo "$_SYSCTL" |
+  cat >/etc/sysctl.conf <<-EOF
+		$(echo "$_SYSCTL" |
     sed "s/#max_orphan/$(echo "$_MEM_BYTES * 0.10 / 65536" | bc | cut -f 1 -d '.')/g" |
     sed "s/#file_max/$(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.')/g" |
     sed "s/#min_free/$(echo "($_MEM_BYTES / 1024) * 0.01" | bc | cut -f 1 -d '.')/g" |
     sed "s/#shmmax/$(echo "$_MEM_BYTES * 0.90" | bc | cut -f 1 -d '.')/g" |
     sed "s/#shmall/$(expr $_MEM_BYTES / $(getconf PAGE_SIZE))/g" |
     sed "s/#max_tw/$(($(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.') * 2))/g")
-EOF
+	EOF
 }
 
 _ssh_eof() {
-  cat >/etc/ssh/sshd_config <<EOF
-$(echo "$(curl -s -L $_SRC/sshd_config)" |
-    sed "s/ListenAddress 0.0.0.0/ListenAddress $_HOST/g" |
-    sed "s/Port 22/Port $_SSHPORT/g")
-EOF
+  local _SSHD=$(curl -s -L $_SRC/sshd_config)
+  cat >/etc/ssh/sshd_config <<-EOF
+		$(echo "$_SSHD" |
+    sed "s/ListenAddress 0.0.0.0/ListenAddress $(_host)/g" |
+    sed "s/Port 22/Port $_port/g")
+	EOF
 }
 
 _nginx_eof() {
-  NGINX=$(curl -s -L $_SRC/nginx.conf)
-  if [ ! -z "${arg[0]}" ]; then
-    _domains=$(for d in ${arg[0]//::/ }; do
+  echo $_SRC
+  local _NGINX=$(curl -s -L $_SRC/nginx.conf)
+  if [ "$_domain" ]; then
+    _srvname=$(for d in $_domain; do
       printf "$d *.$d "
     done)
-    NGINX=$(echo "$NGINX" | sed "s/domain.tld \*\.domain.tld/$(echo "$_domains" | sed 's/.$//')/g")
+    for d in $_domain; do
+      mkdir -p /var/www/$d
+    done
+    _NGINX=$(echo "$_NGINX" | sed "s/domain.tld \*\.domain.tld/$(echo "$_srvname" | sed 's/.$//')/g")
   fi
 
-  echo "${arg[1]}" | grep -Eq "ssl" && NGINX=$(echo "$NGINX" | sed '/# DEFAULT/,/# SSL/d') || NGINX=$(echo "$NGINX" | sed '/# SSL/,$d')
-  echo "${arg[2]}" | grep -Eq "www" && NGINX=$(echo "$NGINX" | sed '/($host/I,+2 d')
+  if [ "$_http" = "80,443" ]; then
+    _NGINX=$(echo "$_NGINX" | sed '/# DEFAULT/,/# SSL/d')
+  else
+    _NGINX=$(echo "$_NGINX" | sed '/# SSL/,/# END/d')
+  fi
 
-  ip a | grep -Eq "inet " || NGINX=$(echo "$NGINX" | sed '/listen [0-9]/d')
-  ip a | grep -Eq "inet6" || NGINX=$(echo "$NGINX" | sed '/listen \[::]/d')
+  if [ "$_www" ]; then
+    _NGINX=$(echo "$_NGINX" | sed '/www\./I,+2 d')
+  fi
 
-  cat >/srv/nginx.conf <<EOF
-$(echo "$NGINX")
-EOF
+  ip a | grep -Eq "inet " || _NGINX=$(echo "$_NGINX" | sed '/listen [0-9]/d')
+  ip a | grep -Eq "inet6" || _NGINX=$(echo "$_NGINX" | sed '/listen \[::]/d')
+
+  cat >/etc/nginx/nginx.conf <<-EOF
+		$(echo "$_NGINX")
+	EOF
 }
 
 _sys() {
-  if [ "${_CMD}" = "cfg" ]; then
-    _proc "installing the sysctl.conf..."
-    _sys_eof
-    /sbin/sysctl -e -p /etc/sysctl.conf >/dev/null 2>&1
-    _success "sysctl.conf successfully installed!"
-  else
-    _err "sys unknown..."
-  fi
+  _info "installing the sysctl.conf..."
+  _sys_eof
+  /sbin/sysctl -e -p /etc/sysctl.conf >/dev/null 2>&1
+  _success "sysctl.conf successfully installed!"
 }
 
 _ssh() {
-  if [ "${_CMD}" != "cfg" ]; then
-    _err "Unknown : ssh"
+  _SSHDFILE="/etc/ssh/sshd_config"
+  if [ "$_port" ]; then
+    _port="$_port"
   else
-    _SSHDFILE="/etc/ssh/sshd_config"
     if [ -f "$_SSHDFILE" ]; then
-      grep -oqP '(?<=Port )[0-9]+' $_SSHDFILE && _SSHPORT=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE) || _SSHPORT="22"
+      grep -oqP '(?<=Port )[0-9]+' $_SSHDFILE && _port=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE) || _port="22"
     else
-      _SSHPORT="22"
+      _port="22"
     fi
-    if [ -z "${arg[0]//[0-9]/}" ] && [ -n "${arg[0]}" ]; then
-      _SSHPORT="${arg[0]}"
-    fi
-    _openPort "$_SSHPORT"
-    _proc "installing the sshd_config..."
-    _ssh_eof
-    systemctl restart sshd
-    _success "sshd_config successfully installed!"
   fi
+  _openPort "$_port"
+  _info "installing the sshd_config..."
+  _ssh_eof
+  systemctl restart sshd
+  _success "sshd_config successfully installed!"
 }
 
 _psg() {
-  if [ "${_CMD}" = "pkg" ]; then
+  if [ "$_CMD" = "psg-pkg" ]; then
     if ! _exists "psql"; then
-      _proc "installing the PostgreSQL..."
+      _info "installing the PostgreSQL..."
       dnf -qy module disable postgresql
       dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm
       dnf -qy install postgresql13-server >/dev/null 2>&1
       /usr/pgsql-13/bin/postgresql-13-setup initdb >/dev/null 2>&1
       systemctl enable postgresql-13 >/dev/null 2>&1
       systemctl start postgresql-13
-      if [ "${arg[0]}" ] && [ "${arg[1]}" ]; then
-        _PGDB="${arg[0]}"
-        _PGPASS="${arg[1]}"
-        echo "$_PGPASS" | passwd "postgres" --stdin >/dev/null 2>&1
+      if [ "$_db" ] && [ "$_pass" ]; then
         _pgdb_eof >/dev/null 2>&1
       fi
       systemctl restart postgresql-13
       _success "PostgreSQL successfully installed!"
     else
-      _warn "PostgreSQL is already installed!"
+      _info "PostgreSQL is already installed!"
     fi
   fi
 
-  if [ "${_CMD}" = "cfg" ]; then
+  if [ "$_CMD" = "psg-cfg" ]; then
     if _exists "psql"; then
       _PSGFILE="/var/lib/pgsql/13/data/postgresql.conf"
-      if [ -f "$_PSGFILE" ]; then
-        grep -oqP '(?<=port = )[0-9]+' $_PSGFILE && _PGPORT=$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE) || _PGPORT="5432"
-        grep -oqP '(?<=max_connections = )[0-9]+' $_PSGFILE && _PGCONN=$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE) || _PGCONN="20"
+      if [ "$_port" ]; then
+        _port="$_port"
       else
-        _PGPORT="5432"
-        _PGCONN="20"
+        if [ -f "$_PSGFILE" ]; then
+          grep -oqP '(?<=port = )[0-9]+' $_PSGFILE && _port=$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE) || _port="5432"
+        fi
+        _port="5432"
       fi
-      if [ -z "${arg[0]//[0-9]/}" ] && [ -n "${arg[0]}" ]; then
-        _PGPORT="${arg[0]}"
+      if [ "$_clients" ]; then
+        _clients="$_clients"
+        if [ $_clients -lt "20" ]; then
+          _clients="20"
+        fi
+      else
+        if [ -f "$_PSGFILE" ]; then
+          grep -oqP '(?<=max_connections = )[0-9]+' $_PSGFILE && _clients=$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE) || _clients="20"
+        else
+          _clients="20"
+        fi
       fi
-      _openPort "$_PGPORT"
-      if [ -z "${arg[1]//[0-9]/}" ] && [ -n "${arg[1]}" ]; then
-        _PGCONN="${arg[1]}"
-      fi
-      if (($_AVG_NUMCORE > "4")); then
+      _openPort "$_port"
+
+      _AVG_NUMCORE=$(echo "$_NUMCORE / 2" | bc | cut -f 1 -d '.')
+      if [ $_AVG_NUMCORE -gt "4" ]; then
         _AVG_NUMCORE="4"
       fi
-      if (($_AVG_NUMCORE < "1")); then
+      if [ $_AVG_NUMCORE -lt "1" ]; then
         _AVG_NUMCORE="1"
       fi
-      _proc "installing the pg_hba.conf..."
+      _info "installing the pg_hba.conf..."
       _pg_hba_eof
       _success "pg_hba.conf successfully installed!"
-      _proc "installing the postgresql.conf..."
+      _info "installing the postgresql.conf..."
       _psg_eof
       systemctl restart postgresql-13
       _success "postgresql.conf successfully installed!"
     else
-      _warn "PostgreSQL is not installed!"
+      _info "PostgreSQL is not installed!"
     fi
   fi
 }
 
 _nginx() {
-  if [ "${_CMD}" = "pkg" ]; then
+  if [ "$_CMD" = "nginx-pkg" ]; then
     if ! _exists "nginx"; then
-      _proc "installing NGINX..."
+      _info "installing NGINX..."
       dnf -qy module disable php
       dnf -qy module disable nginx
       dnf -qy install http://nginx.org/packages/centos/8/x86_64/RPMS/nginx-1.20.1-1.el8.ngx.x86_64.rpm
       dnf -qy install nginx
-      systemctl enable nginx
+      systemctl enable nginx >/dev/null 2>&1
       systemctl start nginx
-      grep -Eq "ssl" ${arg[0]} && _openPort "80,443" || _openPort "80"
+      _openPort $_http
       _success "NGINX successfully installed!"
     else
-      _warn "NGINX is already installed!"
+      _info "NGINX is already installed!"
     fi
   fi
 
-  if [ "${_CMD}" = "cfg" ]; then
+  if [ "$_CMD" = "nginx-cfg" ]; then
     if _exists "nginx"; then
-      _proc "installing the nginx.conf..."
+      _info "installing the nginx.conf..."
       _nginx_eof
       systemctl restart nginx
       _success "nginx.conf successfully installed!"
     else
-      _warn "NGINX is not installed!"
+      _info "NGINX is not installed!"
     fi
   fi
 }
 
 _ipt() {
-  _proc "installing the iptables rules..."
+  _info "installing the iptables rules..."
   systemctl stop iptables
   curl -s $_SRC/iptables.sh | sh
   systemctl start iptables
   _success "iptables rules successfully installed!"
 }
 
-_rmipv() {
-  if [ -z "$1" ]; then
-    _warn "Usage: build.sh --rmipv -n 4 or -n 6"
-    return 1
-  fi
-
-  if [ "$1" = "4" ] || [ "$1" = "6" ]; then
-    _proc "Removing the IPv$1 interface..."
-    _GRUBFILE=/etc/default/grub
-    grep -Eq "ipv$1.disable" $_GRUBFILE || sed -i 's/^GRUB_CMDLINE_LINUX="/&ipv'"$1"'.disable=1 /' $_GRUBFILE
-    grep -Eq "ipv$1.disable=0" $_GRUBFILE | sed -i 's/ipv'"$1"'.disable=0/ipv'"$1"'.disable=1/' $_GRUBFILE
-    grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1
-    _success "IPv$1 interface successfully Removed!"
-  else
-    _err "no such IPv$1 interface exists"
-  fi
-}
-
-install() {
-  if [ -z "$1" ]; then
-    _warn "Usage: build.sh --${_CMD} -i XXX[.../] YYY[.../.../] ZZZ[//.../] QQQ"
-    return 1
-  fi
-
-  for i in ${1//,/ }; do
-    _params=$(echo "$i" | \grep -Po '(?<=\[).*(?=\])')
-    IFS='/' read -r -a arg <<<"$_params"
-    _i=$(echo "_$i" | sed 's/\[.*]//')
-    $_i 2>/dev/null || _err "Unknown : ${_i:1}"
-  done
+_ipv6() {
+  _info "Removing the IPv6 interface..."
+  _GRUBFILE=/etc/default/grub
+  grep -Eq "ipv6.disable" $_GRUBFILE || sed -i 's/^GRUB_CMDLINE_LINUX="/&ipv6.disable=1 /' $_GRUBFILE
+  grep -Eq "ipv6.disable=0" $_GRUBFILE | sed -i 's/ipv6.disable=0/ipv6.disable=1/' $_GRUBFILE
+  grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1
+  _success "IPv6 interface successfully Removed!"
 }
 
 showhelp() {
-  __cyan "Usage: build.sh <command> ... [parameters ...]
-Commands:
-  -h, --help                        Show this help message.
-  --pkg                             Install Packages from Repositories.
-  --cfg                             Install Сonfiguration Settings.
-  --ipt                             Install iptables rules.
-  --rmipv                           Remove IPv6 or IPv4 from interface.
-Parameters:
-  -i <...[.../]>                    Which package / configuration to install and, 
-                                    if necessary, set the parameters in [.../]
-                                    See: $_SRC" >&2
-  printf "\n" >&2
-}
+  cat >&2 <<-EOF
+	${YELLOW}Usage: build.sh <command> ... [parameters ...]
+	Commands:
+  -h, --help                 Show this help message.
+  --pkg                      Install Packages from Repositories.
+  --cfg                      Install Сonfiguration Settings.
+  --disable                  Turn off options.
+	Parameters:
+  -port [0-9]                Specifies the server listening port.
+  -clients [0-9]             Specifies a limit of connected clients to the server.
+  -db <name>                 Specifies a database name.
+  -pass <password>           Specifies a password.
+  -d <domain.tld>            Specifies a domain.
+  --ssl                      Using ssl.
+  --www                      Using www.
+  ${PLAIN}
+	EOF
 
-if ! _exists "bc"; then
-  dnf -qy install bc
-fi
+  exit $1
+}
 
 _process() {
   _CMD=""
-  _i=""
-  _HOST=$(hostname -I | awk '{ print $1 }')
+  _db=""
+  _pass=""
+  _www=""
+  _http="80"
   _TIMEZONE=$(timedatectl | awk '/Time zone:/ {print $3}')
   _NUMCORE=$(cat /proc/cpuinfo | grep processor | wc -l)
-  _AVG_NUMCORE=$(echo "$_NUMCORE / 2" | bc | cut -f 1 -d '.')
   _MEM_BYTES=$(awk '/MemTotal:/ { printf "%0.f", $2 * 1024 }' /proc/meminfo)
   _MEM_MB=$(awk '/MemTotal:/ { printf "%d\n", $2 / 1024 }' /proc/meminfo)
   _STACKSIZE=$(ulimit -s | awk '{ print $1 / 1024 }')
 
-  while [ ${#} -gt 0 ]; do
-    case "${1}" in
+  while [ $# -gt 0 ]; do
+    case "$1" in
     --help | -h)
       showhelp
       return
       ;;
-    --psg)
-      psg
-      ;;
     --pkg)
-      _CMD="pkg"
+      case "$2" in
+      NGINX) _CMD="nginx-pkg" ;;
+      PSG) _CMD="psg-pkg" ;;
+      *)
+        if [ "$2" ]; then
+          _err_arg "Invalid command:" "$2"
+        fi
+        exit 1
+        ;;
+      esac
+      shift
       ;;
     --cfg)
-      _CMD="cfg"
-      ;;
-    --rmipv)
-      _CMD="rmipv"
-      ;;
-    --ipt)
-      _ipt
-      return
-      ;;
-    -i)
-      _ivalue="$2"
-      if [ "$_ivalue" ]; then
-        if _startswith "$_ivalue" "-"; then
-          _err "'$_ivalue' is not a valid ${_CMD} for parameter '$1'"
-          return 1
+      case "$2" in
+      NGINX) _CMD="nginx-cfg" ;;
+      PSG) _CMD="psg-cfg" ;;
+      SYS) _CMD="sys" ;;
+      SSH) _CMD="ssh" ;;
+      IPT) _CMD="ipt" ;;
+      *)
+        if [ "$2" ]; then
+          _err_arg "Invalid command:" "$2"
         fi
-        if [ -z "$_i" ]; then
-          _i="$_ivalue"
-        else
-          _i="$_i,$_ivalue"
+        exit 1
+        ;;
+      esac
+      shift
+      ;;
+    --disable)
+      case "$2" in
+      IPv6) _CMD="ipv6" ;;
+      *)
+        if [ "$2" ]; then
+          _err_arg "Invalid command:" "$2"
         fi
+        exit 1
+        ;;
+      esac
+      shift
+      ;;
+    -port)
+      if is_number "$2"; then
+        _port="$2"
       fi
       shift
       ;;
-    -n)
-      _nvalue="$2"
-      if [ -z "${_nvalue//[0-9]/}" ] && [ -n "$_nvalue" ]; then
-        if _startswith "$_nvalue" "-"; then
-          _err "'$_nvalue' is not a valid ${_CMD} for parameter '$1'"
-          return 1
+    -clients)
+      if is_number "$2"; then
+        _clients="$2"
+      fi
+      shift
+      ;;
+    -db)
+      _db="$2"
+      shift
+      ;;
+    -pass)
+      _pass="$2"
+      shift
+      ;;
+    --ssl)
+      _http="80,443"
+      ;;
+    --www)
+      _www="on"
+      ;;
+    --dev)
+      _SRC="https://$HOST/$AUTHOR/$PROJECT_NAME/dev/src/"
+      ;;
+    -d)
+      if [ "$2" ]; then
+        if _startswith "$2" "-"; then
+          _err_arg "'$2' invalid for parameter" "$1"
+          exit 1
         fi
-        if [ -z "$_n" ]; then
-          _n="$_nvalue"
+        if [ -z "$_domain" ]; then
+          _domain="$2"
+        else
+          _domain="$_domain $2"
         fi
       fi
       shift
       ;;
     *)
-      _err "Unknown parameter : $1"
-      return 1
+      _err_arg "Invalid command:" "$1"
+      exit 1
       ;;
     esac
     shift 1
   done
 
-  if [ "${_CMD}" ]; then
-    if ! _checkSudo; then
-      _err "It seems that you are using sudo"
-      return 1
-    fi
-  fi
-
-  case "${_CMD}" in
-  pkg) install "$_i" ;;
-  cfg) install "$_i" ;;
-  rmipv) _rmipv "$_n" ;;
+  case "$_CMD" in
+  nginx-pkg) _nginx ;;
+  psg-pkg) _psg "$_db" "$_pass" ;;
+  nginx-cfg) _nginx "$_domain" ;;
+  psg-cfg) _psg "$_port" "$_clients" ;;
+  ssh) _ssh "$_port" ;;
+  sys) _sys ;;
+  ipv6) _ipv6 ;;
+  ipt) _ipt ;;
   *)
     if [ "$_CMD" ]; then
-      _err "Invalid command: $_CMD"
+      _err_arg "Invalid command:" "$_CMD"
     fi
-    showhelp
-    return 1
+    exit 1
     ;;
   esac
 }
 
 main() {
-  [ -z "$1" ] && showhelp && return
+  _check_root
+  _os
+  _arch
+  _preinstall
+  [ -z "$1" ] && showhelp && exit 1
   if _startswith "$1" '-'; then _process "$@"; else
-    _err "Invalid command: $@"
+    _err_arg "Invalid command:" "$*"
     showhelp
   fi
 }

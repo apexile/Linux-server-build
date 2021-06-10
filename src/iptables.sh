@@ -7,56 +7,31 @@
 #################        GitHub:  https://github.com/zZerooneXx         #################
 #########################################################################################
 
-__purple() {
-  printf '\33[1;35m%b\33[0m' "$1"
-}
-
-__green() {
-  printf '\33[1;32m%b\33[0m' "$1"
-}
-
-__cyan() {
-  printf '\33[1;36m%b\33[0m' "$1"
-}
-
-_proc() {
-  __purple "[$(date)] "
-  __cyan "$@"
-  printf "\n"
-}
-
-__yellow() {
-  printf '\33[1;33m%b\33[0m' "$1"
-}
-
-_warn() {
-  __purple "[$(date)] "
-  __yellow "$@"
-  printf "\n"
-}
+GREEN=$(printf '\e[32m')
+YELLOW=$(printf '\e[33m')
+PURPLE=$(printf '\e[35m')
+PLAIN=$(printf '\e[0m')
 
 _success() {
-  __purple "[$(date)] "
-  __green "$@"
-  printf "\n"
+  cat >&2 <<-EOF
+	${PURPLE}[$(date)] ${GREEN}$1${PLAIN}
+	EOF
+}
+
+_info() {
+  cat >&2 <<-EOF
+	${PURPLE}[$(date)] ${YELLOW}$1${PLAIN}
+	EOF
 }
 
 _exists() {
-  cmd="$1"
-  if [ -z "$cmd" ]; then
-    _warn "Usage: _exists cmd"
-    return 1
-  fi
-
   if eval type type >/dev/null 2>&1; then
-    eval type "$cmd" >/dev/null 2>&1
+    eval type "$@" >/dev/null 2>&1
   elif command >/dev/null 2>&1; then
-    command -v "$cmd" >/dev/null 2>&1
+    command -v "$@" >/dev/null 2>&1
   else
-    hash "$cmd" >/dev/null 2>&1
+    hash "$@" >/dev/null 2>&1
   fi
-  ret="$?"
-  return $ret
 }
 
 if _exists "nginx" || _exists "apache"; then
@@ -77,7 +52,7 @@ fi
 #########################################################################################
 
 if _exists "firewalld"; then
-  _proc "uninstalling the firewalld..."
+  _info "uninstalling the firewalld..."
   systemctl stop firewalld
   systemctl disable firewalld >/dev/null 2>&1
   dnf -qy remove firewalld
@@ -89,7 +64,7 @@ fi
 #########################################################################################
 
 if ! _exists "iptables"; then
-  _proc "installing the iptables..."
+  _info "installing the iptables..."
   dnf -qy install iptables-services
   ip a | grep -Eq "inet " && systemctl enable iptables >/dev/null 2>&1
   ip a | grep -Eq "inet6" && systemctl enable ip6tables >/dev/null 2>&1
@@ -123,15 +98,22 @@ iptables -t mangle -F
 iptables -t mangle -X
 iptables -t mangle -Z
 # set default policy
-iptables -P INPUT ACCEPT
-iptables -P OUTPUT ACCEPT
-iptables -P FORWARD ACCEPT
 iptables -P INPUT DROP
 iptables -P FORWARD DROP
+iptables -P OUTPUT ACCEPT
 # accept traffic from loopback interface (localhost).
 iptables -A INPUT -i lo -j ACCEPT
-# allow established TCP connections:
-iptables -A INPUT -p tcp -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+# allow established all connections:
+iptables -A INPUT -p all -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A OUTPUT -p all -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -p all -m state --state ESTABLISHED,RELATED -j ACCEPT
+# discard all unidentified packets
+iptables -A INPUT -m state --state INVALID -j DROP
+iptables -A FORWARD -m state --state INVALID -j DROP
+# linking system resources
+iptables -A INPUT -p tcp ! --syn -m state --state NEW -j DROP
+iptables -A OUTPUT -p tcp ! --syn -m state --state NEW -j DROP
 
 #########################################################################################
 ############################### Anti-Attack: Stealth Scan ###############################
