@@ -40,7 +40,7 @@ _err_arg() {
 	EOF
 }
 
-_check_root() {
+_root() {
   local user=""
   user="$(id -un 2>/dev/null || true)"
   if [ "$user" != "root" ]; then
@@ -59,7 +59,7 @@ _exists() {
   fi
 }
 
-is_number() {
+_is_number() {
   expr "$1" + 1 >/dev/null 2>&1
 }
 
@@ -94,6 +94,9 @@ _os() {
       _err "This script can not be run in your system now!"
       exit 1
     fi
+  else
+    _err "This script can not be run in your system now!"
+    exit 1
   fi
 }
 
@@ -251,7 +254,7 @@ _psg() {
     if ! _exists "psql"; then
       _info "installing the PostgreSQL..."
       dnf -qy module disable postgresql
-      dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+      dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-$dist_version-$arch/pgdg-redhat-repo-latest.noarch.rpm
       dnf -qy install postgresql13-server >/dev/null 2>&1
       /usr/pgsql-13/bin/postgresql-13-setup initdb >/dev/null 2>&1
       systemctl enable postgresql-13 >/dev/null 2>&1
@@ -312,12 +315,15 @@ _psg() {
 }
 
 _nginx() {
+  if [ "$lsb_dist" = "redhat" ]; then
+    local lsb_dist="rhel"
+  fi
   if [ "$_CMD" = "nginx-pkg" ]; then
     if ! _exists "nginx"; then
       _info "installing NGINX..."
       dnf -qy module disable php
       dnf -qy module disable nginx
-      dnf -qy install http://nginx.org/packages/centos/8/x86_64/RPMS/nginx-1.20.1-1.el8.ngx.x86_64.rpm
+      dnf -qy install http://nginx.org/packages/$lsb_dist/$dist_version/$arch/RPMS/nginx-1.20.1-1.el8.ngx.$arch.rpm
       dnf -qy install nginx
       systemctl enable nginx >/dev/null 2>&1
       systemctl start nginx
@@ -402,6 +408,7 @@ _process() {
       NGINX) _CMD="nginx-pkg" ;;
       PSG) _CMD="psg-pkg" ;;
       *)
+        [ -z "$2" ] && _err_arg "Usage: build.sh " "$1 ... [parameters ...]" && exit 1
         if [ "$2" ]; then
           _err_arg "Invalid command:" "$2"
         fi
@@ -418,6 +425,7 @@ _process() {
       SSH) _CMD="ssh" ;;
       IPT) _CMD="ipt" ;;
       *)
+        [ -z "$2" ] && _err_arg "Usage: build.sh " "$1 ... [parameters ...]" && exit 1
         if [ "$2" ]; then
           _err_arg "Invalid command:" "$2"
         fi
@@ -430,6 +438,7 @@ _process() {
       case "$2" in
       IPv6) _CMD="ipv6" ;;
       *)
+        [ -z "$2" ] && _err_arg "Usage: build.sh " "$1 ... [parameters ...]" && exit 1
         if [ "$2" ]; then
           _err_arg "Invalid command:" "$2"
         fi
@@ -439,14 +448,26 @@ _process() {
       shift
       ;;
     -port)
-      if is_number "$2"; then
-        _port="$2"
+      if [ "$2" ]; then
+        if ! _is_number "$2"; then
+          _err_arg "'$2' invalid for parameter" "$1"
+          exit 1
+        fi
+        if [ -z "$_port" ]; then
+          _port="$2"
+        fi
       fi
       shift
       ;;
     -clients)
-      if is_number "$2"; then
-        _clients="$2"
+      if [ "$2" ]; then
+        if ! _is_number "$2"; then
+          _err_arg "'$2' invalid for parameter" "$1"
+          exit 1
+        fi
+        if [ -z "$_clients" ]; then
+          _clients="$2"
+        fi
       fi
       shift
       ;;
@@ -508,7 +529,7 @@ _process() {
 }
 
 main() {
-  _check_root
+  _root
   _os
   _arch
   _preinstall
