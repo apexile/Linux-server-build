@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VER="alpha"
+VER="alpha-test"
 HOST="raw.githubusercontent.com"
 AUTHOR="zZerooneXx"
 PROJECT="Linux-server-build"
@@ -192,7 +192,7 @@ _nginx_eof() {
   _NGINX=$(curl -s -L $_SRC/nginx.conf)
   if [ "$_domain" ]; then
     _srvname=$(for d in $_domain; do
-      printf "$d, %s\n" "*.$d "
+      printf "%s " "$d" "*.$d"
     done)
     for d in $_domain; do
       mkdir -p "/var/www/$d"
@@ -333,14 +333,6 @@ _nginx() {
   fi
 }
 
-_ipt() {
-  _info "installing the iptables rules..."
-  systemctl stop iptables
-  curl -s "$_SRC/iptables.sh | sh"
-  systemctl start iptables
-  _success "iptables rules successfully installed!"
-}
-
 _ipv6() {
   _info "Removing the IPv6 interface..."
   _GRUBFILE=/etc/default/grub
@@ -373,7 +365,7 @@ showhelp() {
 
 version() {
   echo "$PROJECT"
-  echo "version $VER"
+  echo "version: $VER"
 }
 
 _process() {
@@ -513,7 +505,7 @@ _process() {
   ssh) _ssh "$_port" ;;
   sys) _sys ;;
   ipv6) _ipv6 ;;
-  ipt) _ipt ;;
+  ipt) curl -sSL $_SRC/iptables.sh | sh ;;
   *)
     if [ "$_CMD" ]; then
       _err_arg "Invalid command:" "$_CMD"

@@ -71,6 +71,8 @@ if ! _exists "iptables"; then
   _success "iptables successfully installed!"
 fi
 
+systemctl stop iptables
+
 #########################################################################################
 ##################################### ANTI SPOOFING #####################################
 #########################################################################################
@@ -80,6 +82,8 @@ if [ -e /proc/sys/net/ipv4/conf/all/rp_filter ]; then
     echo 1 >"$filter"
   done
 fi
+
+_info "installing the iptables rules..."
 
 #########################################################################################
 #################################### DEFAULT POLICY #####################################
@@ -271,3 +275,6 @@ iptables -A INPUT -j DROP
 
 ip a | grep -Eq "inet " && /sbin/iptables-save >/etc/sysconfig/iptables
 ip a | grep -Eq "inet6" && /sbin/ip6tables-save >/etc/sysconfig/ip6tables
+
+systemctl start iptables
+_success "iptables rules successfully installed!"
