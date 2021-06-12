@@ -355,6 +355,7 @@ showhelp() {
 	${YELLOW}Usage: build.sh <command> ... [parameters ...]
 	Commands:
   -h, --help                 Show this help message.
+  -v, --version              Show version info.
   --pkg                      Install Packages from Repositories.
   --cfg                      Install Сonfiguration Settings.
   --disable                  Turn off options.
@@ -385,7 +386,7 @@ _process() {
   _NUMCORE=$(grep -c 'processor' /proc/cpuinfo)
   _MEM_BYTES=$(awk '/MemTotal:/ { printf "%0.f", $2 * 1024 }' /proc/meminfo)
   _MEM_MB=$(awk '/MemTotal:/ { printf "%d\n", $2 / 1024 }' /proc/meminfo)
-  _STACKSIZE=$(sh -c "ulimit -s")
+  _STACKSIZE=$(sh -c "ulimit -s" | awk '{ print $1 / 1024 }')
 
   while [ $# -gt 0 ]; do
     case "$1" in
