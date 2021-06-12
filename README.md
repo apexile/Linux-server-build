@@ -14,17 +14,17 @@
 
 ## 📋 Features
 
-* Bash, dash and sh compatible.
-* Purely written in Shell.
-* IPv6 support.
-* Simple, powerful and very easy to use.
-* Supports systems of any configuration.
+*  Bash, dash and sh compatible.
+*  Purely written in Shell.
+*  IPv6 support.
+*  Simple, powerful and very easy to use.
+*  Supports systems of any configuration.
 
 ## 🐧 Compatibility
 
 Script will run on distro if there are no conflicts.
 
-* CentOS/RHEL 8 version
+*  CentOS/RHEL 8 version
 
 Other distros are likely to be added in the future.
 
