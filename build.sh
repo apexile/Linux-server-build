@@ -1,10 +1,10 @@
 #!/bin/sh
 
-VER=alpha
+VER="alpha"
 HOST="raw.githubusercontent.com"
 AUTHOR="zZerooneXx"
-PROJECT_NAME="Linux-server-build"
-_SRC="https://$HOST/$AUTHOR/$PROJECT_NAME/main/src/"
+PROJECT="Linux-server-build"
+_SRC="https://$HOST/$AUTHOR/$PROJECT/main/src/"
 
 RED=$(printf '\e[31m')
 GREEN=$(printf '\e[32m')
@@ -41,7 +41,6 @@ _err_arg() {
 }
 
 _root() {
-  local user=""
   user="$(id -un 2>/dev/null || true)"
   if [ "$user" != "root" ]; then
     _err "Permission error, please use root user to run this script"
@@ -60,13 +59,10 @@ _exists() {
 }
 
 _is_number() {
-  expr "$1" + 1 >/dev/null 2>&1
+  [ "$1" -ne 0 ] >/dev/null 2>&1
 }
 
 _host() {
-  local server_ip=""
-  local interface_info=""
-
   if _exists ip; then
     interface_info="$(ip addr)"
   elif _exists ifconfig; then
@@ -86,11 +82,10 @@ _host() {
 }
 
 _os() {
-  [ -r /etc/os-release ] && lsb_dist="$(. /etc/os-release && echo "$ID")"
-  [ -r /etc/os-release ] && dist_version="$(. /etc/os-release && echo "$VERSION_ID")"
+  [ -r /etc/os-release ] && _ID=$(grep -oP '(?<=^ID=).+' /etc/os-release | tr -d '"') && _VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
 
-  if [ "$lsb_dist" = "centos" ] || [ "$lsb_dist" = "redhat" ]; then
-    if [ "$dist_version" != "8" ]; then
+  if [ "$_ID" = "redhat" ] || [ "$_ID" = "centos" ]; then
+    if [ "$_VERSION" != "8" ]; then
       _err "This script can not be run in your system now!"
       exit 1
     fi
@@ -101,11 +96,11 @@ _os() {
 }
 
 _arch() {
-  arch="$(uname -m)"
-  if [ "$arch" = "amd64" ] || [ "$arch" = "x86_64" ]; then
-    arch='x86_64'
+  _ARCH="$(uname -m)"
+  if [ "$_ARCH" = "amd64" ] || [ "$_ARCH" = "x86_64" ]; then
+    _ARCH='x86_64'
   else
-    _err "The current script only supports x86_64 systems. Your system is: $arch"
+    _err "The current script only supports x86_64 systems. Your system is: $_ARCH"
     exit 1
   fi
 }
@@ -126,7 +121,7 @@ _preinstall() {
 
 _openPort() {
   if _exists "firewalld"; then
-    for i in ${1//,/ }; do
+    for i in $(echo "$1" | tr ',' '\n'); do
       firewall-cmd --zone=public --permanent --add-port="$i"/tcp >/dev/null 2>&1
     done
     systemctl restart firewalld
@@ -137,7 +132,7 @@ _openPort() {
 }
 
 _psg_eof() {
-  local _PSG=$(curl -s -L $_SRC/postgresql.conf)
+  _PSG=$(curl -s -L $_SRC/postgresql.conf)
   cat >/var/lib/pgsql/13/data/postgresql.conf <<-EOF
 		$(echo "$_PSG" |
     sed "s/'\*'/'$(_host)'/g" |
@@ -149,16 +144,16 @@ _psg_eof() {
     sed "s/#maintenance_work_mem/$(echo "$_MEM_MB * 0.05" | bc | cut -f 1 -d '.')MB/g" |
     sed "s/#work_mem/$(echo "($_MEM_MB / $_clients) * 0.25" | bc | cut -f 1 -d '.')MB/g" |
     sed "s/#temp_buffers/$(echo "($_MEM_MB / $_clients) * 0.4" | bc | cut -f 1 -d '.')MB/g" |
-    sed "s/#numcore/$(echo "$_NUMCORE")/g" |
+    sed "s/#numcore/$_NUMCORE/g" |
     sed "s/#avgnumcore/$(echo "$_AVG_NUMCORE" | bc | cut -f 1 -d '.')/g" |
     sed "s/#max_stack_depth/$(echo "$_STACKSIZE * 0.80" | bc | cut -f 1 -d '.')MB/g")
 	EOF
 }
 
 _pg_hba_eof() {
-  local _PG_HBA=$(curl -s -L $_SRC/pg_hba.conf)
+  _PG_HBA=$(curl -s -L $_SRC/pg_hba.conf)
   cat >/var/lib/pgsql/13/data/pg_hba.conf <<-EOF
-		$(echo "$_PG_HBA")
+		$_PG_HBA
 	EOF
 }
 
@@ -171,7 +166,7 @@ _pgdb_eof() {
 }
 
 _sys_eof() {
-  local _SYSCTL=$(curl -s -L $_SRC/sysctl.conf)
+  _SYSCTL=$(curl -s -L $_SRC/sysctl.conf)
   ip a | grep -Eq "inet6" || _SYSCTL=$(echo "$_SYSCTL" | sed '/net.ipv6/d')
   cat >/etc/sysctl.conf <<-EOF
 		$(echo "$_SYSCTL" |
@@ -179,13 +174,13 @@ _sys_eof() {
     sed "s/#file_max/$(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.')/g" |
     sed "s/#min_free/$(echo "($_MEM_BYTES / 1024) * 0.01" | bc | cut -f 1 -d '.')/g" |
     sed "s/#shmmax/$(echo "$_MEM_BYTES * 0.90" | bc | cut -f 1 -d '.')/g" |
-    sed "s/#shmall/$(expr $_MEM_BYTES / $(getconf PAGE_SIZE))/g" |
+    sed "s/#shmall/$(echo "$_MEM_BYTES / $(getconf PAGE_SIZE)" | bc | cut -f 1 -d '.')/g" |
     sed "s/#max_tw/$(($(echo "$_MEM_BYTES / 4194304 * 256" | bc | cut -f 1 -d '.') * 2))/g")
 	EOF
 }
 
 _ssh_eof() {
-  local _SSHD=$(curl -s -L $_SRC/sshd_config)
+  _SSHD=$(curl -s -L $_SRC/sshd_config)
   cat >/etc/ssh/sshd_config <<-EOF
 		$(echo "$_SSHD" |
     sed "s/ListenAddress 0.0.0.0/ListenAddress $(_host)/g" |
@@ -194,14 +189,13 @@ _ssh_eof() {
 }
 
 _nginx_eof() {
-  echo $_SRC
-  local _NGINX=$(curl -s -L $_SRC/nginx.conf)
+  _NGINX=$(curl -s -L $_SRC/nginx.conf)
   if [ "$_domain" ]; then
     _srvname=$(for d in $_domain; do
-      printf "$d *.$d "
+      printf "$d, %s\n" "*.$d "
     done)
     for d in $_domain; do
-      mkdir -p /var/www/$d
+      mkdir -p "/var/www/$d"
     done
     _NGINX=$(echo "$_NGINX" | sed "s/domain.tld \*\.domain.tld/$(echo "$_srvname" | sed 's/.$//')/g")
   fi
@@ -220,7 +214,7 @@ _nginx_eof() {
   ip a | grep -Eq "inet6" || _NGINX=$(echo "$_NGINX" | sed '/listen \[::]/d')
 
   cat >/etc/nginx/nginx.conf <<-EOF
-		$(echo "$_NGINX")
+		$_NGINX
 	EOF
 }
 
@@ -233,9 +227,7 @@ _sys() {
 
 _ssh() {
   _SSHDFILE="/etc/ssh/sshd_config"
-  if [ "$_port" ]; then
-    _port="$_port"
-  else
+  if [ -z "$_port" ]; then
     if [ -f "$_SSHDFILE" ]; then
       grep -oqP '(?<=Port )[0-9]+' $_SSHDFILE && _port=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE) || _port="22"
     else
@@ -254,7 +246,7 @@ _psg() {
     if ! _exists "psql"; then
       _info "installing the PostgreSQL..."
       dnf -qy module disable postgresql
-      dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-$dist_version-$arch/pgdg-redhat-repo-latest.noarch.rpm
+      dnf -qy install "https://download.postgresql.org/pub/repos/yum/reporpms/EL-$_VERSION-$_ARCH/pgdg-redhat-repo-latest.noarch.rpm"
       dnf -qy install postgresql13-server >/dev/null 2>&1
       /usr/pgsql-13/bin/postgresql-13-setup initdb >/dev/null 2>&1
       systemctl enable postgresql-13 >/dev/null 2>&1
@@ -272,33 +264,28 @@ _psg() {
   if [ "$_CMD" = "psg-cfg" ]; then
     if _exists "psql"; then
       _PSGFILE="/var/lib/pgsql/13/data/postgresql.conf"
-      if [ "$_port" ]; then
-        _port="$_port"
-      else
+      if [ -z "$_port" ]; then
         if [ -f "$_PSGFILE" ]; then
           grep -oqP '(?<=port = )[0-9]+' $_PSGFILE && _port=$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE) || _port="5432"
         fi
         _port="5432"
       fi
-      if [ "$_clients" ]; then
-        _clients="$_clients"
-        if [ $_clients -lt "20" ]; then
-          _clients="20"
-        fi
-      else
+      if [ -z "$_clients" ]; then
         if [ -f "$_PSGFILE" ]; then
           grep -oqP '(?<=max_connections = )[0-9]+' $_PSGFILE && _clients=$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE) || _clients="20"
         else
           _clients="20"
         fi
+      elif [ "$_clients" -lt "20" ]; then
+        _clients="20"
       fi
       _openPort "$_port"
 
       _AVG_NUMCORE=$(echo "$_NUMCORE / 2" | bc | cut -f 1 -d '.')
-      if [ $_AVG_NUMCORE -gt "4" ]; then
+      if [ "$_AVG_NUMCORE" -gt "4" ]; then
         _AVG_NUMCORE="4"
       fi
-      if [ $_AVG_NUMCORE -lt "1" ]; then
+      if [ "$_AVG_NUMCORE" -lt "1" ]; then
         _AVG_NUMCORE="1"
       fi
       _info "installing the pg_hba.conf..."
@@ -315,19 +302,19 @@ _psg() {
 }
 
 _nginx() {
-  if [ "$lsb_dist" = "redhat" ]; then
-    local lsb_dist="rhel"
+  if [ "$ID" = "redhat" ]; then
+    _ID="rhel"
   fi
   if [ "$_CMD" = "nginx-pkg" ]; then
     if ! _exists "nginx"; then
       _info "installing NGINX..."
       dnf -qy module disable php
       dnf -qy module disable nginx
-      dnf -qy install http://nginx.org/packages/$lsb_dist/$dist_version/$arch/RPMS/nginx-1.20.1-1.el8.ngx.$arch.rpm
+      dnf -qy install "http://nginx.org/packages/$_ID/$_VERSION/$_ARCH/RPMS/nginx-1.20.1-1.el8.ngx.$_ARCH.rpm"
       dnf -qy install nginx
       systemctl enable nginx >/dev/null 2>&1
       systemctl start nginx
-      _openPort $_http
+      _openPort "$_http"
       _success "NGINX successfully installed!"
     else
       _info "NGINX is already installed!"
@@ -349,7 +336,7 @@ _nginx() {
 _ipt() {
   _info "installing the iptables rules..."
   systemctl stop iptables
-  curl -s $_SRC/iptables.sh | sh
+  curl -s "$_SRC/iptables.sh | sh"
   systemctl start iptables
   _success "iptables rules successfully installed!"
 }
@@ -381,8 +368,11 @@ showhelp() {
   --www                      Using www.
   ${PLAIN}
 	EOF
+}
 
-  exit $1
+version() {
+  echo "$PROJECT"
+  echo "version $VER"
 }
 
 _process() {
@@ -392,16 +382,20 @@ _process() {
   _www=""
   _http="80"
   _TIMEZONE=$(timedatectl | awk '/Time zone:/ {print $3}')
-  _NUMCORE=$(cat /proc/cpuinfo | grep processor | wc -l)
+  _NUMCORE=$(grep -c 'processor' /proc/cpuinfo)
   _MEM_BYTES=$(awk '/MemTotal:/ { printf "%0.f", $2 * 1024 }' /proc/meminfo)
   _MEM_MB=$(awk '/MemTotal:/ { printf "%d\n", $2 / 1024 }' /proc/meminfo)
-  _STACKSIZE=$(ulimit -s | awk '{ print $1 / 1024 }')
+  _STACKSIZE=$(sh -c "ulimit -s")
 
   while [ $# -gt 0 ]; do
     case "$1" in
     --help | -h)
       showhelp
-      return
+      exit
+      ;;
+    --version | -v)
+      version
+      exit
       ;;
     --pkg)
       case "$2" in
@@ -486,7 +480,7 @@ _process() {
       _www="on"
       ;;
     --dev)
-      _SRC="https://$HOST/$AUTHOR/$PROJECT_NAME/dev/src/"
+      _SRC="https://$HOST/$AUTHOR/$PROJECT/dev/src/"
       ;;
     -d)
       if [ "$2" ]; then
