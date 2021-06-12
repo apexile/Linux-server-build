@@ -6,7 +6,7 @@
   <p>
     
   ![GitHub](https://img.shields.io/github/license/zZerooneXx/Linux-server-build?color=008FFF)
-  ![Shellcheck](https://github.com/zZerooneXx/Linux-server-build/workflows/Shellcheck/badge.svg)
+  ![shfmt](https://github.com/zZerooneXx/Linux-server-build/workflows/shfmt/badge.svg)
   [![Codacy Badge](https://app.codacy.com/project/badge/Grade/5c979acea1ba4a33b94ee1e55cdaa9b4)](https://www.codacy.com/gh/zZerooneXx/Linux-server-build/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=zZerooneXx/Linux-server-build&amp;utm_campaign=Badge_Grade)
   
   </p>
