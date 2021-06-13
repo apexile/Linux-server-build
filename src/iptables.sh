@@ -34,18 +34,8 @@ _exists() {
   fi
 }
 
-if _exists "nginx" || _exists "apache"; then
-  HTTP=80,443
-else
-  HTTP=8080
-fi
-
-_SSHDFILE="/etc/ssh/sshd_config"
-if [ -f "$_SSHDFILE" ]; then
-  grep -oqP '(?<=Port )[0-9]+' $_SSHDFILE && _SSHPORT=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE) || _SSHPORT="22"
-else
-  _SSHPORT="22"
-fi
+_HTTP="80"
+[ -r /etc/nginx/nginx.conf ] && grep -oqP 'listen\s\W*443\W' /etc/nginx/nginx.conf && _HTTP="80,443"
 
 #########################################################################################
 ################################### REMOVE FIREWALLD ####################################
@@ -66,7 +56,7 @@ fi
 if ! _exists "iptables"; then
   _info "installing the iptables..."
   dnf -qy install iptables-services
-  ip a | grep -Eq "inet " && systemctl enable iptables >/dev/null 2>&1
+  ip a | grep -Eq "inet\s" && systemctl enable iptables >/dev/null 2>&1
   ip a | grep -Eq "inet6" && systemctl enable ip6tables >/dev/null 2>&1
   _success "iptables successfully installed!"
 fi
@@ -83,11 +73,11 @@ if [ -e /proc/sys/net/ipv4/conf/all/rp_filter ]; then
   done
 fi
 
-_info "installing the iptables rules..."
-
 #########################################################################################
 #################################### DEFAULT POLICY #####################################
 #########################################################################################
+
+_info "installing the iptables rules..."
 
 # clear all rules
 iptables -F
@@ -194,7 +184,7 @@ iptables -A INPUT -p tcp --syn -j SYN_FLOOD
 #########################################################################################
 
 iptables -N HTTP_DOS # make a chain with the name "HTTP_DOS"
-iptables -A HTTP_DOS -p tcp -m multiport --dports $HTTP \
+iptables -A HTTP_DOS -p tcp -m multiport --dports $_HTTP \
   -m hashlimit \
   --hashlimit 1/s \
   --hashlimit-burst 100 \
@@ -208,7 +198,7 @@ iptables -A HTTP_DOS -j LOG --log-prefix "http_dos_attack: "
 iptables -A HTTP_DOS -j DROP
 
 # packets to HTTP jump to the "HTTP_DOS" chain
-iptables -A INPUT -p tcp -m multiport --dports $HTTP -j HTTP_DOS
+iptables -A INPUT -p tcp -m multiport --dports $_HTTP -j HTTP_DOS
 
 #########################################################################################
 ############################# Anti-Attack: IDENT port probe #############################
@@ -243,19 +233,15 @@ iptables -A INPUT -d 224.0.0.1 -j DROP
 iptables -A INPUT -p icmp -j ACCEPT
 
 # HTTP, HTTPS
-iptables -A INPUT -p tcp -m multiport --dports $HTTP -j ACCEPT
+iptables -A INPUT -p tcp -m multiport --dports $_HTTP -j ACCEPT
 
 # SSH
+[ -r /etc/ssh/sshd_config ] && _SSHPORT=$(grep -oP '(?<=^Port\s)[0-9]+' /etc/ssh/sshd_config) || _SSHPORT="22"
 iptables -A INPUT -p tcp -m multiport --dports $_SSHPORT -j ACCEPT
 
 # POSTGRESQL
 if _exists "psql"; then
-  _PSGFILE="/var/lib/pgsql/13/data/postgresql.conf"
-  if [ -f "$_PSGFILE" ]; then
-    grep -oqP '(?<=port = )[0-9]+' $_PSGFILE && _PGPORT=$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE) || _PGPORT="5432"
-  else
-    _PGPORT="5432"
-  fi
+  [ -r /var/lib/pgsql/13/data/postgresql.conf ] && _PGPORT=$(grep -oP '(?<=^port)\W+[0-9]+' /var/lib/pgsql/13/data/postgresql.conf | tr -d " ='") || _PGPORT="5432"
   iptables -A INPUT -p tcp -m multiport --dports $_PGPORT -j ACCEPT
 fi
 
@@ -273,7 +259,7 @@ fi
 iptables -A INPUT -j LOG --log-prefix "drop: "
 iptables -A INPUT -j DROP
 
-ip a | grep -Eq "inet " && /sbin/iptables-save >/etc/sysconfig/iptables
+ip a | grep -Eq "inet\s" && /sbin/iptables-save >/etc/sysconfig/iptables
 ip a | grep -Eq "inet6" && /sbin/ip6tables-save >/etc/sysconfig/ip6tables
 
 systemctl start iptables

@@ -16,6 +16,10 @@ _startswith() {
   echo "$1" | grep "^$2" >/dev/null 2>&1
 }
 
+_is_number() {
+  [ "$1" -ne 0 ] >/dev/null 2>&1
+}
+
 _success() {
   cat >&2 <<-EOF
 	${PURPLE}[$(date)] ${GREEN}$1${PLAIN}
@@ -58,27 +62,23 @@ _exists() {
   fi
 }
 
-_is_number() {
-  [ "$1" -ne 0 ] >/dev/null 2>&1
-}
-
 _host() {
   if _exists ip; then
-    interface_info="$(ip addr)"
+    _INTERFACE_INFO="$(ip addr)"
   elif _exists ifconfig; then
-    interface_info="$(ifconfig)"
+    _INTERFACE_INFO="$(ifconfig)"
   fi
 
-  server_ip=$(echo "$interface_info" |
+  _SERVER_IP=$(echo "$_INTERFACE_INFO" |
     grep -oE "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" |
     grep -vE "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." |
     head -n 1)
 
-  if [ -z "$server_ip" ]; then
-    server_ip="$(wget -qO- --no-check-certificate https://ipv4.icanhazip.com)"
+  if [ -z "$_SERVER_IP" ]; then
+    _SERVER_IP="$(wget -qO- --no-check-certificate https://ipv4.icanhazip.com)"
   fi
 
-  echo "$server_ip"
+  echo "$_SERVER_IP"
 }
 
 _os() {
@@ -136,14 +136,14 @@ _psg_eof() {
   cat >/var/lib/pgsql/13/data/postgresql.conf <<-EOF
 		$(echo "$_PSG" |
     sed "s/'\*'/'$(_host)'/g" |
-    sed "s/port = 5432/port = $_port/g" |
+    sed "s/port = 5432/port = $_PORT/g" |
     sed "s~#timezone~$_TIMEZONE~g" |
-    sed "s/max_connections = 20/max_connections = $_clients/g" |
+    sed "s/max_connections = 20/max_connections = $_CLIENTS/g" |
     sed "s/#shared_buffers/$(echo "$_MEM_MB * 0.25" | bc | cut -f 1 -d '.')MB/g" |
     sed "s/#effective_cache_size/$(echo "$_MEM_MB * 0.75" | bc | cut -f 1 -d '.')MB/g" |
     sed "s/#maintenance_work_mem/$(echo "$_MEM_MB * 0.05" | bc | cut -f 1 -d '.')MB/g" |
-    sed "s/#work_mem/$(echo "($_MEM_MB / $_clients) * 0.25" | bc | cut -f 1 -d '.')MB/g" |
-    sed "s/#temp_buffers/$(echo "($_MEM_MB / $_clients) * 0.4" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#work_mem/$(echo "($_MEM_MB / $_CLIENTS) * 0.25" | bc | cut -f 1 -d '.')MB/g" |
+    sed "s/#temp_buffers/$(echo "($_MEM_MB / $_CLIENTS) * 0.4" | bc | cut -f 1 -d '.')MB/g" |
     sed "s/#numcore/$_NUMCORE/g" |
     sed "s/#avgnumcore/$(echo "$_AVG_NUMCORE" | bc | cut -f 1 -d '.')/g" |
     sed "s/#max_stack_depth/$(echo "$_STACKSIZE * 0.80" | bc | cut -f 1 -d '.')MB/g")
@@ -159,9 +159,9 @@ _pg_hba_eof() {
 
 _pgdb_eof() {
   su postgres <<-EOF
-		psql -c "CREATE DATABASE $_db"
-		psql -c "ALTER USER postgres WITH PASSWORD '$_pass';"
-		psql -c "GRANT ALL privileges ON DATABASE $_db TO postgres;"
+		psql -c "CREATE DATABASE $_DB"
+		psql -c "ALTER USER postgres WITH PASSWORD '$_PASS';"
+		psql -c "GRANT ALL privileges ON DATABASE $_DB TO postgres;"
 	EOF
 }
 
@@ -184,33 +184,33 @@ _ssh_eof() {
   cat >/etc/ssh/sshd_config <<-EOF
 		$(echo "$_SSHD" |
     sed "s/ListenAddress 0.0.0.0/ListenAddress $(_host)/g" |
-    sed "s/Port 22/Port $_port/g")
+    sed "s/Port 22/Port $_PORT/g")
 	EOF
 }
 
 _nginx_eof() {
   _NGINX=$(curl -s -L $_SRC/nginx.conf)
-  if [ "$_domain" ]; then
-    _srvname=$(for d in $_domain; do
+  if [ "$_DOMAIN" ]; then
+    _SRVNAME=$(for d in $_DOMAIN; do
       printf "%s " "$d" "*.$d"
     done)
-    for d in $_domain; do
+    for d in $_DOMAIN; do
       mkdir -p "/var/www/$d"
     done
-    _NGINX=$(echo "$_NGINX" | sed "s/domain.tld \*\.domain.tld/$(echo "$_srvname" | sed 's/.$//')/g")
+    _NGINX=$(echo "$_NGINX" | sed "s/domain.tld \*\.domain.tld/$(echo "$_SRVNAME" | sed 's/.$//')/g")
   fi
 
-  if [ "$_http" = "80,443" ]; then
+  if [ "$_HTTP" = "80,443" ]; then
     _NGINX=$(echo "$_NGINX" | sed '/# DEFAULT/,/# SSL/d')
   else
     _NGINX=$(echo "$_NGINX" | sed '/# SSL/,/# END/d')
   fi
 
-  if [ "$_www" ]; then
+  if [ "$_WWW" ]; then
     _NGINX=$(echo "$_NGINX" | sed '/www\./I,+2 d')
   fi
 
-  ip a | grep -Eq "inet " || _NGINX=$(echo "$_NGINX" | sed '/listen [0-9]/d')
+  ip a | grep -Eq "inet\s" || _NGINX=$(echo "$_NGINX" | sed '/listen [0-9]/d')
   ip a | grep -Eq "inet6" || _NGINX=$(echo "$_NGINX" | sed '/listen \[::]/d')
 
   cat >/etc/nginx/nginx.conf <<-EOF
@@ -226,15 +226,10 @@ _sys() {
 }
 
 _ssh() {
-  _SSHDFILE="/etc/ssh/sshd_config"
-  if [ -z "$_port" ]; then
-    if [ -f "$_SSHDFILE" ]; then
-      grep -oqP '(?<=Port )[0-9]+' $_SSHDFILE && _port=$(grep -oP '(?<=Port )[0-9]+' $_SSHDFILE) || _port="22"
-    else
-      _port="22"
-    fi
+  if [ -z "$_PORT" ]; then
+    [ -r /etc/ssh/sshd_config ] && _PORT=$(grep -oP '(?<=^Port\s)[0-9]+' /etc/ssh/sshd_config) || _PORT="22"
   fi
-  _openPort "$_port"
+  _openPort "$_PORT"
   _info "installing the sshd_config..."
   _ssh_eof
   systemctl restart sshd
@@ -251,7 +246,7 @@ _psg() {
       /usr/pgsql-13/bin/postgresql-13-setup initdb >/dev/null 2>&1
       systemctl enable postgresql-13 >/dev/null 2>&1
       systemctl start postgresql-13
-      if [ "$_db" ] && [ "$_pass" ]; then
+      if [ "$_DB" ] && [ "$_PASS" ]; then
         _pgdb_eof >/dev/null 2>&1
       fi
       systemctl restart postgresql-13
@@ -264,22 +259,16 @@ _psg() {
   if [ "$_CMD" = "psg-cfg" ]; then
     if _exists "psql"; then
       _PSGFILE="/var/lib/pgsql/13/data/postgresql.conf"
-      if [ -z "$_port" ]; then
-        if [ -f "$_PSGFILE" ]; then
-          grep -oqP '(?<=port = )[0-9]+' $_PSGFILE && _port=$(grep -oP '(?<=port = )[0-9]+' $_PSGFILE) || _port="5432"
-        fi
-        _port="5432"
+      if [ -z "$_PORT" ]; then
+        [ -r /var/lib/pgsql/13/data/postgresql.conf ] && _PORT=$(grep -oP '(?<=^port)\W+[0-9]+' /var/lib/pgsql/13/data/postgresql.conf | tr -d " ='") || _PORT="5432"
       fi
-      if [ -z "$_clients" ]; then
-        if [ -f "$_PSGFILE" ]; then
-          grep -oqP '(?<=max_connections = )[0-9]+' $_PSGFILE && _clients=$(grep -oP '(?<=max_connections = )[0-9]+' $_PSGFILE) || _clients="20"
-        else
-          _clients="20"
-        fi
-      elif [ "$_clients" -lt "20" ]; then
-        _clients="20"
+      if [ -z "$_CLIENTS" ]; then
+        [ -r /var/lib/pgsql/13/data/postgresql.conf ] && _CLIENTS=$(grep -oP '(?<=^max_connections)\W+[0-9]+' /var/lib/pgsql/13/data/postgresql.conf | tr -d " ='") || _CLIENTS="20"
       fi
-      _openPort "$_port"
+      if [ "$_CLIENTS" -lt "20" ]; then
+        _CLIENTS="20"
+      fi
+      _openPort "$_PORT"
 
       _AVG_NUMCORE=$(echo "$_NUMCORE / 2" | bc | cut -f 1 -d '.')
       if [ "$_AVG_NUMCORE" -gt "4" ]; then
@@ -288,13 +277,11 @@ _psg() {
       if [ "$_AVG_NUMCORE" -lt "1" ]; then
         _AVG_NUMCORE="1"
       fi
-      _info "installing the pg_hba.conf..."
+      _info "installing the pg_hba.conf and postgresql.conf..."
       _pg_hba_eof
-      _success "pg_hba.conf successfully installed!"
-      _info "installing the postgresql.conf..."
       _psg_eof
       systemctl restart postgresql-13
-      _success "postgresql.conf successfully installed!"
+      _success "pg_hba.conf and postgresql.conf successfully installed!"
     else
       _info "PostgreSQL is not installed!"
     fi
@@ -302,11 +289,11 @@ _psg() {
 }
 
 _nginx() {
-  if [ "$ID" = "redhat" ]; then
-    _ID="rhel"
-  fi
   if [ "$_CMD" = "nginx-pkg" ]; then
     if ! _exists "nginx"; then
+      if [ "$_ID" = "redhat" ]; then
+        _ID="rhel"
+      fi
       _info "installing NGINX..."
       dnf -qy module disable php
       dnf -qy module disable nginx
@@ -314,7 +301,7 @@ _nginx() {
       dnf -qy install nginx
       systemctl enable nginx >/dev/null 2>&1
       systemctl start nginx
-      _openPort "$_http"
+      _openPort "$_HTTP"
       _success "NGINX successfully installed!"
     else
       _info "NGINX is already installed!"
@@ -370,10 +357,11 @@ version() {
 
 _process() {
   _CMD=""
-  _db=""
-  _pass=""
-  _www=""
-  _http="80"
+  _DB=""
+  _PASS=""
+  _WWW=""
+  _HTTP="80"
+  _DOMAIN=""
   _TIMEZONE=$(timedatectl | awk '/Time zone:/ {print $3}')
   _NUMCORE=$(grep -c 'processor' /proc/cpuinfo)
   _MEM_BYTES=$(awk '/MemTotal:/ { printf "%0.f", $2 * 1024 }' /proc/meminfo)
@@ -440,8 +428,8 @@ _process() {
           _err_arg "'$2' invalid for parameter" "$1"
           exit 1
         fi
-        if [ -z "$_port" ]; then
-          _port="$2"
+        if [ -z "$_PORT" ]; then
+          _PORT="$2"
         fi
       fi
       shift
@@ -452,25 +440,25 @@ _process() {
           _err_arg "'$2' invalid for parameter" "$1"
           exit 1
         fi
-        if [ -z "$_clients" ]; then
-          _clients="$2"
+        if [ -z "$_CLIENTS" ]; then
+          _CLIENTS="$2"
         fi
       fi
       shift
       ;;
     -db)
-      _db="$2"
+      _DB="$2"
       shift
       ;;
     -pass)
-      _pass="$2"
+      _PASS="$2"
       shift
       ;;
     --ssl)
-      _http="80,443"
+      _HTTP="80,443"
       ;;
     --www)
-      _www="on"
+      _WWW="on"
       ;;
     --dev)
       _SRC="https://$HOST/$AUTHOR/$PROJECT/dev/src/"
@@ -481,10 +469,10 @@ _process() {
           _err_arg "'$2' invalid for parameter" "$1"
           exit 1
         fi
-        if [ -z "$_domain" ]; then
-          _domain="$2"
+        if [ -z "$_DOMAIN" ]; then
+          _DOMAIN="$2"
         else
-          _domain="$_domain $2"
+          _DOMAIN="$_DOMAIN $2"
         fi
       fi
       shift
@@ -499,10 +487,10 @@ _process() {
 
   case "$_CMD" in
   nginx-pkg) _nginx ;;
-  psg-pkg) _psg "$_db" "$_pass" ;;
-  nginx-cfg) _nginx "$_domain" ;;
-  psg-cfg) _psg "$_port" "$_clients" ;;
-  ssh) _ssh "$_port" ;;
+  psg-pkg) _psg "$_DB" "$_PASS" ;;
+  nginx-cfg) _nginx "$_DOMAIN" ;;
+  psg-cfg) _psg "$_PORT" "$_CLIENTS" ;;
+  ssh) _ssh "$_PORT" ;;
   sys) _sys ;;
   ipv6) _ipv6 ;;
   ipt) curl -sSL $_SRC/iptables.sh | sh ;;
