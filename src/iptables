@@ -1,0 +1,108 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+
+# CUSTOM CHAINS
+:STEALTH_SCAN - [0:0]
+:PING_OF_DEATH - [0:0]
+:SYN_FLOOD - [0:0]
+:HTTP_DOS - [0:0]
+
+# ACCEPT LOOPBACK TRAFFIC
+-A INPUT -i lo -j ACCEPT
+
+# ALLOW ESTABLISHED CONNECTIONS
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# PORT SCANNING WITH FRAGMENT PACKETS, DOS ATTACKS
+-A INPUT -f -j LOG --log-prefix "fragment_packet:"
+-A INPUT -f -j DROP
+
+# STEALTH SCAN
+-A INPUT -p tcp -m tcp --tcp-flags SYN,ACK SYN,ACK -m state --state NEW -j STEALTH_SCAN
+-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j STEALTH_SCAN
+-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -j STEALTH_SCAN
+-A INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j STEALTH_SCAN
+-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,SYN,RST,ACK,URG -j STEALTH_SCAN
+-A INPUT -p tcp -m tcp --tcp-flags FIN,RST FIN,RST -j STEALTH_SCAN
+-A INPUT -p tcp -m tcp --tcp-flags FIN,ACK FIN -j STEALTH_SCAN
+-A INPUT -p tcp -m tcp --tcp-flags PSH,ACK PSH -j STEALTH_SCAN
+-A INPUT -p tcp -m tcp --tcp-flags ACK,URG URG -j STEALTH_SCAN
+-A STEALTH_SCAN -j LOG --log-prefix "stealth_scan_attack: "
+-A STEALTH_SCAN -j DROP
+
+# PING OF DEATH
+-A PING_OF_DEATH -p icmp -m icmp --icmp-type 8 -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 10 --hashlimit-mode srcip --hashlimit-name t_PING_OF_DEATH --hashlimit-htable-expire 300000 -j RETURN
+-A PING_OF_DEATH -j LOG --log-prefix "ping_of_death_attack: "
+-A PING_OF_DEATH -j DROP
+-A INPUT -p icmp -m icmp --icmp-type 8 -j PING_OF_DEATH
+
+# SYN FLOOD ATTACK
+-A SYN_FLOOD -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m hashlimit --hashlimit-upto 200/sec --hashlimit-burst 3 --hashlimit-mode srcip --hashlimit-name t_SYN_FLOOD --hashlimit-htable-expire 300000 -j RETURN
+-A SYN_FLOOD -j LOG --log-prefix "syn_flood_attack: "
+-A SYN_FLOOD -j DROP
+-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -j SYN_FLOOD
+
+# HTTP DoS/DDoS ATTACK
+-A HTTP_DOS -p tcp -m multiport --dports 80 -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 100 --hashlimit-mode srcip --hashlimit-name t_HTTP_DOS --hashlimit-htable-expire 300000 -j RETURN
+-A HTTP_DOS -j LOG --log-prefix "http_dos_attack: "
+-A HTTP_DOS -j DROP
+-A INPUT -p tcp -m multiport --dports 80 -j HTTP_DOS
+
+# SSH BRUTE FORCE
+-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m multiport --dports 22 -m recent --set --name ssh_attack --mask 255.255.255.255 --rsource 
+-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m multiport --dports 22 -m recent --rcheck --seconds 180 --hitcount 8 --name ssh_attack --mask 255.255.255.255 --rsource -j LOG --log-prefix "ssh_brute_force: "
+-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m multiport --dports 22 -m recent --rcheck --seconds 180 --hitcount 8 --name ssh_attack --mask 255.255.255.255 --rsource -j REJECT --reject-with tcp-reset
+
+# IDENT PORT PROBE
+-A INPUT -p tcp -m multiport --dports 113 -j REJECT --reject-with tcp-reset
+
+# PACKETS DESTINED FOR ALL HOSTS (BROADCAST ADDRESS, MULTICAST ADDRESS) ARE DISCARDED
+-A INPUT -d 192.168.1.255/32 -j LOG --log-prefix "drop_broadcast: "
+-A INPUT -d 192.168.1.255/32 -j DROP
+-A INPUT -d 255.255.255.255/32 -j LOG --log-prefix "drop_broadcast: "
+-A INPUT -d 255.255.255.255/32 -j DROP
+-A INPUT -d 224.0.0.1/32 -j LOG --log-prefix "drop_broadcast: "
+-A INPUT -d 224.0.0.1/32 -j DROP
+
+# DROP FRAGMENTS
+-A INPUT -j LOG --log-prefix "drop: "
+-A INPUT -j DROP
+
+# ICMP
+-A INPUT -p icmp -j ACCEPT
+
+# HTTP
+-A INPUT -p tcp -m multiport --dports 80 -j ACCEPT
+
+# SSH
+-A INPUT -p tcp -m multiport --dports 22 -j ACCEPT
+
+COMMIT
+
+*security
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+COMMIT
+
+*raw
+:PREROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+COMMIT
+
+*mangle
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+COMMIT
+
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+COMMIT
