@@ -9,6 +9,13 @@
 :SYN_FLOOD - [0:0]
 :HTTP_DOS - [0:0]
 
+# INPUT PERMISSION FROM ALL HOSTS
+## ICMP
+-A INPUT -p icmp -j ACCEPT
+
+## SSH
+-A INPUT -p tcp -m multiport --dports 22 -j ACCEPT
+
 # ACCEPT LOOPBACK TRAFFIC
 -A INPUT -i lo -j ACCEPT
 
@@ -69,13 +76,6 @@
 # DROP FRAGMENTS
 -A INPUT -j LOG --log-prefix "drop: "
 -A INPUT -j DROP
-
-# INPUT PERMISSION FROM ALL HOSTS
-## ICMP
--A INPUT -p icmp -j ACCEPT
-
-## SSH
--A INPUT -p tcp -m multiport --dports 22 -j ACCEPT
 
 COMMIT
 
