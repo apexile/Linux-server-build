@@ -16,8 +16,8 @@
 ## SSH
 -A INPUT -p tcp -m multiport --dports 22 -j ACCEPT
 
-## HTTP
--A INPUT -p tcp -m multiport --dports 80 -j ACCEPT
+## HTTP/HTTPS
+-A INPUT -p tcp -m multiport --dports 80,443 -j ACCEPT
 
 # ACCEPT LOOPBACK TRAFFIC
 -A INPUT -i lo -j ACCEPT
@@ -55,10 +55,10 @@
 -A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -j SYN_FLOOD
 
 # HTTP DoS/DDoS ATTACK
--A HTTP_DOS -p tcp -m multiport --dports 80 -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 100 --hashlimit-mode srcip --hashlimit-name t_HTTP_DOS --hashlimit-htable-expire 300000 -j RETURN
+-A HTTP_DOS -p tcp -m multiport --dports 80,443 -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 100 --hashlimit-mode srcip --hashlimit-name t_HTTP_DOS --hashlimit-htable-expire 300000 -j RETURN
 -A HTTP_DOS -j LOG --log-prefix "http_dos_attack: "
 -A HTTP_DOS -j DROP
--A INPUT -p tcp -m multiport --dports 80 -j HTTP_DOS
+-A INPUT -p tcp -m multiport --dports 80,443 -j HTTP_DOS
 
 # SSH BRUTE FORCE
 -A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m multiport --dports 22 -m recent --set --name ssh_attack --mask 255.255.255.255 --rsource 
